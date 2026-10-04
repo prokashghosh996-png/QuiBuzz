@@ -1,0 +1,89 @@
+generator client {
+  provider = "prisma-client-js"
+}
+datasource db {
+  provider = "postgresql"
+  url = env("DATABASE_URL")
+}
+enum QuizStatus {
+  SETUP
+  READY
+  LIVE
+  ROUND_COMPLETE
+  QUIZ_COMPLETE
+}
+enum ScoreType {
+  DIRECT_CORRECT
+  BONUS_CORRECT
+  POUNCE_CORRECT
+  POUNCE_WRONG
+  MANUAL_ADJUSTMENT
+}
+model Quiz {
+  id String @id @default(uuid())
+  name String
+  master String @default("")
+  status QuizStatus @default(SETUP)
+  positive Int @default(10)
+  negative Int @default(5)
+  pounceSeconds Int @default(5)
+  version Int @default(0)
+  draft Json
+  state Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  teams Team[]
+  rounds Round[]
+  events ScoreEvent[]
+  commands Command[]
+}
+model Team {
+  id String @id @default(uuid())
+  quizId String
+  quiz Quiz @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  letter String
+  name String
+  members String[]
+  initialOrder Int
+  events ScoreEvent[]
+  @@unique([quizId, letter])
+}
+model Round {
+  id String @id @default(uuid())
+  quizId String
+  quiz Quiz @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  name String
+  questions Int
+  order Int
+  events ScoreEvent[]
+  @@unique([quizId, order])
+}
+model ScoreEvent {
+  id String @id @default(uuid())
+  sequence Int @unique @default(autoincrement())
+  quizId String
+  quiz Quiz @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  teamId String
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  roundId String
+  round Round @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  question Int
+  type ScoreType
+  marks Int
+  reason String @default("")
+  replacesId String?
+  createdAt DateTime @default(now())
+  voidedAt DateTime?
+  voidReason String?
+  @@index([quizId, createdAt])
+  @@index([teamId, roundId])
+}
+model Command {
+  id String @id
+  quizId String
+  quiz Quiz @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  action String
+  payload Json
+  createdAt DateTime @default(now())
+  @@index([quizId, createdAt])
+}
