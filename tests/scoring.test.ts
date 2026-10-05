@@ -81,6 +81,12 @@ test('PostgreSQL scoring, bounce, pounces, retries, concurrency, history and ref
       'Round one host',
     );
     await act({ type: 'assign', target: 'directTeamId', teamId: q.teams[1].id });
+    await assert.rejects(
+      () => act({ type: 'score', teamId: q.teams[1].id, scoreType: 'DIRECT_CORRECT' }),
+      /Bonus is closed/,
+    );
+    await act({ type: 'navigate', delta: 1 });
+    await act({ type: 'assign', target: 'directTeamId', teamId: q.teams[1].id });
     const body = {
       requestId: crypto.randomUUID(),
       version: q.version,
@@ -90,8 +96,8 @@ test('PostgreSQL scoring, bounce, pounces, retries, concurrency, history and ref
     q = await command(q.id, body);
     assert.equal(score(1), 10);
     await assert.rejects(() => act(body.action), /already has a score/);
-    assert.equal((q as unknown as Quiz).state.assignments['0:1'].nextTeamId, q.teams[2].id);
-    assert.equal((q as unknown as Quiz).state.question, 1);
+    assert.equal((q as unknown as Quiz).state.assignments['0:2'].nextTeamId, q.teams[2].id);
+    assert.equal((q as unknown as Quiz).state.question, 2);
     await assert.rejects(
       () => command(q.id, { ...body, action: { ...body.action, teamId: q.teams[0].id } }),
       /different action/,
@@ -110,6 +116,7 @@ test('PostgreSQL scoring, bounce, pounces, retries, concurrency, history and ref
     q = await getQuiz(q.id);
     await act({ type: 'undo' });
     assert.deepEqual([score(0), score(1)], [10, 10]);
+    await act({ type: 'navigate', delta: -1 });
     await act({ type: 'settings', positive: 20, negative: 10, pounceSeconds: 1, confirmed: true });
     assert.equal(score(2), -5);
     await assert.rejects(
@@ -126,11 +133,11 @@ test('PostgreSQL scoring, bounce, pounces, retries, concurrency, history and ref
     await act({ type: 'navigate', delta: 1 });
     s = (q as unknown as Quiz).state;
     assert.equal(s.question, 2);
-    assert.equal(s.assignments['0:2'].directTeamId, q.teams[2].id);
+    assert.equal(s.assignments['0:2'].directTeamId, q.teams[1].id);
     await act({ type: 'score', teamId: q.teams[0].id, scoreType: 'POUNCE_CORRECT' });
     await act({ type: 'undo' });
     await act({ type: 'navigate', delta: -1 });
-    await assert.rejects(() => act(body.action), /already has a score/);
+    await assert.rejects(() => act(body.action), /Bonus is closed/);
     assert.equal((q as unknown as Quiz).state.assignments['0:1'].directTeamId, q.teams[1].id);
     await act({ type: 'adjust', teamId: q.teams[2].id, marks: 5, reason: 'Accepted answer' });
     assert.equal(score(2), 0);
