@@ -52,6 +52,10 @@ test('PostgreSQL scoring, bounce, pounces, retries, concurrency, history and ref
     );
     await act({ type: 'assign', target: 'bounceTeamId', teamId: q.teams[4].id });
     await act({ type: 'score', teamId: q.teams[4].id, scoreType: 'BONUS_CORRECT' });
+    await assert.rejects(
+      () => act({ type: 'score', teamId: q.teams[5].id, scoreType: 'BONUS_CORRECT' }),
+      /Bonus is closed/,
+    );
     await act({ type: 'score', teamId: q.teams[0].id, scoreType: 'POUNCE_CORRECT' });
     await act({ type: 'score', teamId: q.teams[2].id, scoreType: 'POUNCE_WRONG' });
     assert.deepEqual([score(4), score(0), score(2)], [10, 10, -5]);
@@ -173,6 +177,11 @@ test('PostgreSQL scoring, bounce, pounces, retries, concurrency, history and ref
     await act({ type: 'assign', target: 'directTeamId', teamId: q.teams[0].id });
     await act({ type: 'score', teamId: q.teams[0].id, scoreType: 'DIRECT_CORRECT' });
     assert.equal((q as unknown as Quiz).state.assignments['0:1'].nextTeamId, q.teams[5].id);
+    await assert.rejects(
+      () => act({ type: 'score', teamId: q.teams[3].id, scoreType: 'BONUS_CORRECT' }),
+      /Bonus is closed/,
+    );
+    await act({ type: 'undo' });
     await act({ type: 'score', teamId: q.teams[3].id, scoreType: 'BONUS_CORRECT' });
     assert.equal((q as unknown as Quiz).state.assignments['0:1'].nextTeamId, q.teams[2].id);
     await act({ type: 'assign', target: 'nextTeamId', teamId: q.teams[1].id });

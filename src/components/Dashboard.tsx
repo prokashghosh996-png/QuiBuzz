@@ -72,8 +72,15 @@ function TeamCard({
       event.question === quiz.state.question &&
       event.type !== 'MANUAL_ADJUSTMENT',
   );
+  const bonusClosed = quiz.events.some(
+    (event) =>
+      !event.voidedAt &&
+      event.roundId === quiz.rounds[quiz.state.roundIndex].id &&
+      event.question === quiz.state.question &&
+      (event.type === 'DIRECT_CORRECT' || event.type === 'BONUS_CORRECT'),
+  );
   const award = async (scoreType: Exclude<ScoreType, 'MANUAL_ADJUSTMENT'>) => {
-    if (guard.current || hasScored) return;
+    if (guard.current || hasScored || (scoreType === 'BONUS_CORRECT' && bonusClosed)) return;
     guard.current = true;
     setCooldown(true);
     await act({ type: 'score', teamId: team.id, scoreType });
@@ -130,8 +137,14 @@ function TeamCard({
           Direct <b>+{quiz.positive}</b>
         </button>
         <button
-          disabled={busy || cooldown || hasScored || direct}
-          title={direct ? 'The direct question team cannot receive Bonus points' : undefined}
+          disabled={busy || cooldown || hasScored || direct || bonusClosed}
+          title={
+            bonusClosed
+              ? 'Direct or Bonus points have already been awarded for this question'
+              : direct
+                ? 'The direct question team cannot receive Bonus points'
+                : undefined
+          }
           className="score-btn bonus"
           onClick={() => void award('BONUS_CORRECT')}
         >

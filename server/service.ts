@@ -169,6 +169,18 @@ export async function command(quizId: string, body: unknown) {
               )
             )
               fail('This team already has a score for this question. Edit or undo its existing score.');
+            if (
+              action.type === 'score' &&
+              action.scoreType === 'BONUS_CORRECT' &&
+              q.events.some(
+                (event) =>
+                  !event.voidedAt &&
+                  event.roundId === round.id &&
+                  event.question === s.question &&
+                  (event.type === 'DIRECT_CORRECT' || event.type === 'BONUS_CORRECT'),
+              )
+            )
+              fail('Bonus is closed: Direct or Bonus points were already awarded for this question.');
           await tx.scoreEvent.create({
             data: {
               quizId,
