@@ -157,6 +157,18 @@ export async function command(quizId: string, body: unknown) {
             action.teamId === assignment().directTeamId
           )
             fail('The current direct question team cannot pounce.');
+            if (
+              action.type === 'score' &&
+              q.events.some(
+                (event) =>
+                  !event.voidedAt &&
+                  event.teamId === action.teamId &&
+                  event.roundId === round.id &&
+                  event.question === s.question &&
+                  event.type !== 'MANUAL_ADJUSTMENT',
+              )
+            )
+              fail('This team already has a score for this question. Edit or undo its existing score.');
           await tx.scoreEvent.create({
             data: {
               quizId,

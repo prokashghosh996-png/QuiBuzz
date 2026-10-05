@@ -56,6 +56,12 @@ test('PostgreSQL scoring, bounce, pounces, retries, concurrency, history and ref
     await act({ type: 'score', teamId: q.teams[2].id, scoreType: 'POUNCE_WRONG' });
     assert.deepEqual([score(4), score(0), score(2)], [10, 10, -5]);
     assert.equal(q.events.length, 3);
+    for (const scoreType of ['BONUS_CORRECT', 'POUNCE_CORRECT', 'POUNCE_WRONG']) {
+      await assert.rejects(
+        () => act({ type: 'score', teamId: q.teams[0].id, scoreType }),
+        /already has a score/,
+      );
+    }
     assert.ok(q.events.every((e) => e.question === 1));
     let s = (q as unknown as Quiz).state;
     assert.equal(s.assignments['0:1'].directTeamId, q.teams[3].id);
@@ -79,6 +85,7 @@ test('PostgreSQL scoring, bounce, pounces, retries, concurrency, history and ref
     q = await command(q.id, body);
     q = await command(q.id, body);
     assert.equal(score(1), 10);
+    await assert.rejects(() => act(body.action), /already has a score/);
     assert.equal((q as unknown as Quiz).state.assignments['0:1'].nextTeamId, q.teams[2].id);
     assert.equal((q as unknown as Quiz).state.question, 1);
     await assert.rejects(
@@ -87,7 +94,7 @@ test('PostgreSQL scoring, bounce, pounces, retries, concurrency, history and ref
     );
     const version = q.version;
     const parallel = await Promise.allSettled(
-      [0, 4].map((i) =>
+      [3, 5].map((i) =>
         command(q.id, {
           requestId: crypto.randomUUID(),
           version,
@@ -101,25 +108,42 @@ test('PostgreSQL scoring, bounce, pounces, retries, concurrency, history and ref
     assert.deepEqual([score(0), score(1)], [10, 10]);
     await act({ type: 'settings', positive: 20, negative: 10, pounceSeconds: 1, confirmed: true });
     assert.equal(score(2), -5);
-    await act({ type: 'score', teamId: q.teams[2].id, scoreType: 'POUNCE_WRONG' });
-    assert.equal(score(2), -15);
+    await assert.rejects(
+      () => act({ type: 'score', teamId: q.teams[2].id, scoreType: 'POUNCE_WRONG' }),
+      /already has a score/,
+    );
+    await act({ type: 'score', teamId: q.teams[3].id, scoreType: 'POUNCE_WRONG' });
+    assert.equal(score(3), -10);
+    await act({ type: 'undo' });
+    await act({ type: 'score', teamId: q.teams[3].id, scoreType: 'POUNCE_CORRECT' });
+    assert.equal(score(3), 20);
     await act({ type: 'undo' });
     assert.equal(score(2), -5);
     await act({ type: 'navigate', delta: 1 });
     s = (q as unknown as Quiz).state;
     assert.equal(s.question, 2);
     assert.equal(s.assignments['0:2'].directTeamId, q.teams[2].id);
+    await act({ type: 'score', teamId: q.teams[0].id, scoreType: 'POUNCE_CORRECT' });
+    await act({ type: 'undo' });
     await act({ type: 'navigate', delta: -1 });
+    await assert.rejects(() => act(body.action), /already has a score/);
     assert.equal((q as unknown as Quiz).state.assignments['0:1'].directTeamId, q.teams[1].id);
     await act({ type: 'adjust', teamId: q.teams[2].id, marks: 5, reason: 'Accepted answer' });
     assert.equal(score(2), 0);
     const event = q.events.find((e) => e.teamId === q.teams[4].id && !e.voidedAt)!;
     await act({ type: 'editEvent', eventId: event.id, marks: 15, reason: 'Corrected award' });
     assert.equal(score(4), 15);
+    await assert.rejects(
+      () => act({ type: 'score', teamId: q.teams[4].id, scoreType: 'BONUS_CORRECT' }),
+      /already has a score/,
+    );
     assert.ok(q.events.find((e) => e.id === event.id)?.voidedAt);
     const replacement = q.events.find((e) => e.replacesId === event.id)!;
     await act({ type: 'void', eventId: replacement.id, reason: 'Removed after review' });
     assert.equal(score(4), 0);
+    await act({ type: 'score', teamId: q.teams[4].id, scoreType: 'POUNCE_CORRECT' });
+    assert.equal(score(4), 20);
+    await act({ type: 'undo' });
     await act({ type: 'order', order: q.teams.map((t) => t.id).reverse() });
     await act({ type: 'timer', operation: 'start' });
     assert.ok((q as unknown as Quiz).state.timer.endsAt);

@@ -118,6 +118,7 @@ test('full setup, live scoring, projector sync, history and results', async ({
 
     await cards.nth(0).getByRole('button', { name: 'Direct +10', exact: true }).dblclick();
     await expect(cards.nth(0).locator('.score-value')).toHaveText('10');
+      await expect(cards.nth(0).locator('.score-actions button:disabled')).toHaveCount(4);
     await expect(
       cards.nth(0).getByRole('button', { name: 'Bonus +10', exact: true }),
     ).toBeDisabled();
@@ -126,6 +127,7 @@ test('full setup, live scoring, projector sync, history and results', async ({
     ).toBeEnabled();
     await cards.nth(1).getByRole('button', { name: 'Pounce −5', exact: true }).click();
     await expect(cards.nth(1).locator('.score-value')).toHaveText('-5');
+      await expect(cards.nth(1).locator('.score-actions button:disabled')).toHaveCount(4);
     await expect(page.locator('.question-counter strong')).toContainText('01');
     const projector = await context.newPage();
     await projector.goto(`/projector/${id}`);
@@ -136,6 +138,7 @@ test('full setup, live scoring, projector sync, history and results', async ({
     await expect(projector.locator('.leader-score')).toHaveText(['10', '-5']);
     await page.getByRole('button', { name: 'Undo last score', exact: true }).click();
     await expect(cards.nth(1).locator('.score-value')).toHaveText('0');
+      await expect(cards.nth(1).locator('.score-actions button:enabled')).toHaveCount(3);
     await expect(projector.locator('.leader-score')).toHaveText(['10', '0']);
     await page.getByRole('button', { name: 'Start', exact: true }).click();
     await expect(page.getByText('TIME UP', { exact: true })).toBeVisible();
