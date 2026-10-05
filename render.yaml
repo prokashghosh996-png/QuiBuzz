@@ -1,0 +1,29 @@
+# Initial free deployment. Review Render's sleep and database-expiry limits
+# before using this plan for a live event.
+services:
+  - type: web
+    name: quibuzz-api
+    runtime: node
+    plan: free
+    region: singapore
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm run db:migrate && npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: "24"
+      - key: HOST
+        value: 0.0.0.0
+      - key: DATABASE_URL
+        fromDatabase:
+          name: quibuzz-db
+          property: connectionString
+      - key: OPERATOR_KEY
+        generateValue: true
+
+databases:
+  - name: quibuzz-db
+    plan: free
+    region: singapore
+    databaseName: quibuzz
+    user: quibuzz

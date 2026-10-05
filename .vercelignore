@@ -1,9 +1,10 @@
+.env
+.env.*
+.data/
+.git/
 node_modules/
 dist/
 dist-server/
-.env
-.data/
-playwright-report/
 test-results/
+playwright-report/
 *.log
-.vercel/
