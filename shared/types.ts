@@ -132,3 +132,22 @@ export const followingTeam = (order: string[], id: string) =>
 
 export const roundMaster = (q: Quiz, index = q.state.roundIndex) =>
   q.state.roundMasters?.[q.rounds[index]?.id] || q.draft.rounds[index]?.master?.trim() || q.master;
+
+// Manual corrections do not count as another scoring attempt.
+export function hasQuestionScore(
+  events: ReadonlyArray<
+    Pick<ScoreEvent, 'teamId' | 'roundId' | 'question' | 'type'> & { voidedAt: unknown }
+  >,
+  teamId: string,
+  roundId: string,
+  question: number,
+): boolean {
+  return events.some(
+    (event) =>
+      !event.voidedAt &&
+      event.teamId === teamId &&
+      event.roundId === roundId &&
+      event.question === question &&
+      event.type !== 'MANUAL_ADJUSTMENT',
+  );
+}

@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import {
   currentAssignment,
+  hasQuestionScore,
   roundMaster,
   total,
   teamLabel,
@@ -64,13 +65,11 @@ function TeamCard({
     bounced = a.bounceTeamId === team.id;
   const score = total(quiz, team.id),
     roundScore = total(quiz, team.id, quiz.rounds[quiz.state.roundIndex].id);
-  const hasScored = quiz.events.some(
-    (event) =>
-      !event.voidedAt &&
-      event.teamId === team.id &&
-      event.roundId === quiz.rounds[quiz.state.roundIndex].id &&
-      event.question === quiz.state.question &&
-      event.type !== 'MANUAL_ADJUSTMENT',
+  const hasScored = hasQuestionScore(
+    quiz.events,
+    team.id,
+    quiz.rounds[quiz.state.roundIndex].id,
+    quiz.state.question,
   );
   const bonusClosed = quiz.events.some(
     (event) =>
