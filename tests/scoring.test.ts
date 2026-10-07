@@ -81,6 +81,14 @@ test('PostgreSQL scoring, bounce, pounces, retries, concurrency, history and ref
       ((await getQuiz(q.id)) as unknown as Quiz).state.roundMasters?.[q.rounds[0].id],
       'Round one host',
     );
+    await assert.rejects(
+      () => act({ type: 'score', teamId: q.teams[3].id, scoreType: 'DIRECT_CORRECT' }),
+      /Direct is closed/,
+    );
+    // Removing the bonus reopens Direct; pounces still work on that question.
+    const bonus = q.events.find((e) => e.type === 'BONUS_CORRECT' && !e.voidedAt)!;
+    await act({ type: 'void', eventId: bonus.id, reason: 'Reopen direct for correction' });
+    await act({ type: 'score', teamId: q.teams[4].id, scoreType: 'POUNCE_CORRECT' });
     await act({ type: 'assign', target: 'directTeamId', teamId: q.teams[1].id });
     const body = {
       requestId: crypto.randomUUID(),

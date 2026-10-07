@@ -171,7 +171,7 @@ export async function command(quizId: string, body: unknown) {
             );
           if (
             action.type === 'score' &&
-            action.scoreType === 'BONUS_CORRECT' &&
+            (action.scoreType === 'BONUS_CORRECT' || action.scoreType === 'DIRECT_CORRECT') &&
             q.events.some(
               (event) =>
                 !event.voidedAt &&
@@ -180,7 +180,11 @@ export async function command(quizId: string, body: unknown) {
                 (event.type === 'DIRECT_CORRECT' || event.type === 'BONUS_CORRECT'),
             )
           )
-            fail('Bonus is closed: Direct or Bonus points were already awarded for this question.');
+            fail(
+              action.scoreType === 'DIRECT_CORRECT'
+                ? 'Direct is closed: Direct or Bonus points were already awarded for this question.'
+                : 'Bonus is closed: Direct or Bonus points were already awarded for this question.',
+            );
           await tx.scoreEvent.create({
             data: {
               quizId,
