@@ -416,9 +416,15 @@ export function Dashboard({
                   </select>
                 </Field>
                 <ArrowRight className="select-arrow" size={18} />
-                <Field label="Next direct team · override anytime">
+                <Field
+                  label={
+                    quiz.state.bounceEnabled === false
+                      ? 'Next direct team (team order)'
+                      : 'Next direct team (override anytime)'
+                  }
+                >
                   <select
-                    disabled={busy}
+                    disabled={busy || quiz.state.bounceEnabled === false}
                     value={a.nextTeamId}
                     onChange={(e) =>
                       void act({ type: 'assign', target: 'nextTeamId', teamId: e.target.value })
@@ -439,6 +445,20 @@ export function Dashboard({
                   points.
                 </p>
               )}
+              <label className="checkbox">
+                <input
+                  type="checkbox"
+                  checked={quiz.state.bounceEnabled !== false}
+                  disabled={busy}
+                  onChange={(e) => void act({ type: 'bounceMode', enabled: e.target.checked })}
+                />
+                Bounce rotation
+              </label>
+              <p className="muted">
+                {quiz.state.bounceEnabled !== false
+                  ? 'Next question follows the team that scores Direct or Bonus.'
+                  : 'Questions follow team order: A, B, C, and so on.'}
+              </p>
               <div className="question-buttons">
                 <button
                   className="btn"
@@ -465,7 +485,7 @@ export function Dashboard({
             </div>
             <TimerDisplay quiz={quiz} act={act} busy={busy} />
           </section>
-          <div className="scoring-layout">
+          <div className={`scoring-layout ${quiz.teams.length === 8 ? 'eight-teams' : ''}`}>
             <div className="scoring-main">
               <div className="section-heading teams-heading">
                 <div>

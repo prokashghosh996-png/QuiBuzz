@@ -88,7 +88,10 @@ export async function command(quizId: string, body: unknown) {
       const initQuestion = (direct: string) => {
         s.assignments[questionKey(s)] ??= {
           directTeamId: direct,
-          nextTeamId: followingTeam(s.order, direct),
+          nextTeamId:
+            s.bounceEnabled === false
+              ? s.order[s.question % s.order.length]
+              : followingTeam(s.order, direct),
           bounceTeamId: null,
         };
       };
@@ -124,6 +127,7 @@ export async function command(quizId: string, body: unknown) {
             await tx.round.create({
               data: { quizId, name: r.name.trim(), questions: r.questions, order: i },
             });
+          s.bounceEnabled = d.bounceEnabled ?? true;
           s.order = teams.map((t) => t.id);
           s.roundIndex = 0;
           s.question = 1;
@@ -195,6 +199,7 @@ export async function command(quizId: string, body: unknown) {
           });
           if (
             action.type === 'score' &&
+            s.bounceEnabled !== false &&
             (action.scoreType === 'DIRECT_CORRECT' || action.scoreType === 'BONUS_CORRECT')
           )
             assignment().nextTeamId = followingTeam(s.order, action.teamId);
@@ -237,17 +242,39 @@ export async function command(quizId: string, body: unknown) {
           live();
           const next = s.question + action.delta;
           if (next < 1 || next > round.questions) fail('Question is outside the current round.');
-          const direct = assignment().nextTeamId;
+          const direct =
+            s.bounceEnabled === false
+              ? s.order[(next - 1) % s.order.length]
+              : assignment().nextTeamId;
           s.question = next;
           initQuestion(direct);
           resetTimer();
           break;
         }
+        case 'bounceMode': {
+          started();
+          s.bounceEnabled = action.enabled;
+          const winner = q.events
+            .filter(
+              (e) =>
+                !e.voidedAt &&
+                e.roundId === round.id &&
+                e.question === s.question &&
+                (e.type === 'DIRECT_CORRECT' || e.type === 'BONUS_CORRECT'),
+            )
+            .at(-1);
+          assignment().nextTeamId = action.enabled
+            ? followingTeam(s.order, winner?.teamId ?? assignment().directTeamId)
+            : s.order[s.question % s.order.length];
+          break;
+        }
         case 'assign':
           live();
           team(action.teamId);
+          if (action.target === 'nextTeamId' && s.bounceEnabled === false)
+            fail('Enable bounce rotation to override the next direct team.');
           assignment()[action.target] = action.teamId;
-          if (action.target === 'directTeamId')
+          if (action.target === 'directTeamId' && s.bounceEnabled !== false)
             assignment().nextTeamId = followingTeam(s.order, action.teamId);
           break;
         case 'order': {
@@ -259,7 +286,10 @@ export async function command(quizId: string, body: unknown) {
           )
             fail('Team order must include each team exactly once.');
           s.order = action.order;
-          assignment().nextTeamId = followingTeam(s.order, assignment().directTeamId);
+          assignment().nextTeamId =
+            s.bounceEnabled === false
+              ? s.order[s.question % s.order.length]
+              : followingTeam(s.order, assignment().directTeamId);
           break;
         }
         case 'timer': {

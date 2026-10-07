@@ -22,6 +22,7 @@ test('setup validation catches missing members, quiz master and invalid scoring'
 test('PostgreSQL scoring, bounce, pounces, retries, concurrency, history and refresh', async () => {
   const d = defaultDraft();
   d.name = 'Automated integration test';
+  d.bounceEnabled = true;
   d.master = 'Test host';
   d.teams = Array.from({ length: 6 }, (_, i) => ({ name: '', members: [`Member ${i + 1}`] }));
   d.rounds = [

@@ -10,8 +10,17 @@ if (!argument) {
   process.exit(1);
 }
 const backend = new URL(argument);
-if (backend.protocol !== 'https:' || backend.username || backend.password || backend.search || backend.hash || backend.pathname !== '/') {
-  throw new Error('Provide the public HTTPS backend origin, without credentials, paths or query parameters.');
+if (
+  backend.protocol !== 'https:' ||
+  backend.username ||
+  backend.password ||
+  backend.search ||
+  backend.hash ||
+  backend.pathname !== '/'
+) {
+  throw new Error(
+    'Provide the public HTTPS backend origin, without credentials, paths or query parameters.',
+  );
 }
 const config = {
   $schema: 'https://openapi.vercel.sh/vercel.json',
@@ -21,7 +30,7 @@ const config = {
   outputDirectory: 'dist',
   rewrites: [
     { source: '/api/:path*', destination: `${backend.origin}/api/:path*` },
-    { source: '/(.*)', destination: '/index.html' },
+    { source: '/((?!api(?:/|$)).*)', destination: '/index.html' },
   ],
 };
 writeFileSync(new URL('../vercel.json', import.meta.url), JSON.stringify(config, null, 2) + '\n');

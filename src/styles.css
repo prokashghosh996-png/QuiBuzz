@@ -3235,3 +3235,26 @@ tbody tr:last-child td {
     font-size: 15px;
   }
 }
+
+/* Eight teams occupy two rows, with supporting panels below the cards. */
+.scoring-layout.eight-teams {
+  grid-template-columns: minmax(0, 1fr);
+}
+.eight-teams .dashboard-aside {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+}
+.history-filters {
+  flex-wrap: wrap;
+}
+@media (min-width: 901px) {
+  .eight-teams .team-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+@media (max-width: 700px) {
+  .eight-teams .dashboard-aside {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

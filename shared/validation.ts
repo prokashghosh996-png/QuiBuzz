@@ -7,6 +7,7 @@ export const draftSchema = z.object({
   negative: count(0, 10000),
   pounceSeconds: count(1, 3600),
   step: count(0, 5),
+  bounceEnabled: z.boolean().optional(),
   teams: z
     .array(
       z.object({
@@ -47,6 +48,7 @@ export const actionSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('saveDraft'), draft: draftSchema }),
   z.object({ type: z.literal('ready'), draft: readySchema }),
   z.object({ type: z.literal('start') }),
+  z.object({ type: z.literal('bounceMode'), enabled: z.boolean() }),
   z.object({
     type: z.literal('score'),
     teamId: id,

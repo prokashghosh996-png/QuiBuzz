@@ -8,6 +8,7 @@ export interface Draft {
   negative: number;
   pounceSeconds: number;
   step: number;
+  bounceEnabled?: boolean;
   teams: { name: string; members: string[] }[];
   rounds: { name: string; questions: number; master?: string }[];
 }
@@ -17,6 +18,7 @@ export interface QuestionState {
   bounceTeamId: string | null;
 }
 export interface LiveState {
+  bounceEnabled?: boolean;
   roundMasters?: Record<string, string>;
   roundIndex: number;
   question: number;
@@ -88,6 +90,7 @@ export const defaultDraft = (): Draft => ({
   negative: 5,
   pounceSeconds: 5,
   step: 0,
+  bounceEnabled: false,
   teams: Array.from({ length: 4 }, () => ({ name: '', members: ['', ''] })),
   rounds: [
     { name: 'General knowledge', questions: 12 },

@@ -414,6 +414,14 @@ export function Setup({ quiz, act, busy }: { quiz: Quiz; act: Act; busy: boolean
                   />
                 </Field>
               </div>
+              <label className="checkbox">
+                <input
+                  type="checkbox"
+                  checked={draft.bounceEnabled ?? true}
+                  onChange={(e) => update({ ...draft, bounceEnabled: e.target.checked })}
+                />
+                Bounce rotation: next question follows the Direct or Bonus scorer
+              </label>
               <Field label="Pounce time · seconds">
                 <input
                   type="number"

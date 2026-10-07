@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { History as HistoryIcon, Pencil, Trash2, Undo2, Search } from 'lucide-react';
+import { History as HistoryIcon, Pencil, Trash2, Undo2, Search, Filter } from 'lucide-react';
 import {
   points,
   scoreLabels,
@@ -164,6 +164,10 @@ export function History({
   onAll?: () => void;
 }) {
   const [filter, setFilter] = useState('');
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [selectedTeam, setSelectedTeam] = useState('');
+  const [question, setQuestion] = useState('');
+  const [sort, setSort] = useState('recent');
   const [showVoided, setShowVoided] = useState(true);
   const [edit, setEdit] = useState<{ event: ScoreEvent; remove: boolean } | null>(null);
   const all = quiz.events
@@ -172,11 +176,25 @@ export function History({
     .filter(
       (e) =>
         (!teamId || e.teamId === teamId) &&
+        (!selectedTeam || e.teamId === selectedTeam) &&
+        (!question || e.question === Number(question)) &&
         (showVoided || !e.voidedAt) &&
         (!filter ||
           `${teamLabel(quiz.teams.find((t) => t.id === e.teamId))} ${scoreLabels[e.type]} ${e.reason}`
             .toLowerCase()
             .includes(filter.toLowerCase())),
+    );
+  if (sort === 'team')
+    all.sort(
+      (a, b) =>
+        (quiz.teams.find((t) => t.id === a.teamId)?.initialOrder ?? 0) -
+        (quiz.teams.find((t) => t.id === b.teamId)?.initialOrder ?? 0),
+    );
+  if (sort === 'question')
+    all.sort(
+      (a, b) =>
+        (quiz.rounds.find((r) => r.id === a.roundId)?.order ?? 0) -
+          (quiz.rounds.find((r) => r.id === b.roundId)?.order ?? 0) || a.question - b.question,
     );
   const events = compact ? all.slice(0, 5) : all;
   return (
@@ -201,6 +219,56 @@ export function History({
       </div>
       {!compact && (
         <div className="history-filters">
+          <button
+            className="btn"
+            aria-expanded={filtersOpen}
+            onClick={() => setFiltersOpen(!filtersOpen)}
+          >
+            <Filter size={16} /> Filter / sort
+          </button>
+          {filtersOpen && (
+            <>
+              {!teamId && (
+                <Field label="Team">
+                  <select value={selectedTeam} onChange={(e) => setSelectedTeam(e.target.value)}>
+                    <option value="">All teams</option>
+                    {quiz.teams.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {teamLabel(t)}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+              )}
+              <Field label="Question number">
+                <input
+                  type="number"
+                  min={1}
+                  placeholder="All questions"
+                  value={question}
+                  onChange={(e) => setQuestion(e.target.value)}
+                />
+              </Field>
+              <Field label="Sort by">
+                <select value={sort} onChange={(e) => setSort(e.target.value)}>
+                  <option value="recent">Most recent</option>
+                  <option value="team">Team order</option>
+                  <option value="question">Round and question number</option>
+                </select>
+              </Field>
+              <button
+                className="btn"
+                onClick={() => {
+                  setSelectedTeam('');
+                  setQuestion('');
+                  setSort('recent');
+                  setFilter('');
+                }}
+              >
+                Clear filters
+              </button>
+            </>
+          )}
           <label className="search">
             <Search size={17} />
             <input
