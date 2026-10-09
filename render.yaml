@@ -18,8 +18,10 @@ services:
         fromDatabase:
           name: quibuzz-db
           property: connectionString
-      - key: OPERATOR_KEY
-        generateValue: true
+      - key: NODE_ENV
+        value: production
+      - key: COOKIE_SECURE
+        value: "true"
 
 databases:
   - name: quibuzz-db

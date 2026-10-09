@@ -91,9 +91,9 @@ Each seed invocation creates a new demo; it never replaces existing quizzes.
 | `DATABASE_URL` | Required PostgreSQL connection string        |
 | `PORT`         | Express port, default `3001`                 |
 | `HOST`         | Express listen address, default `0.0.0.0`    |
-| `OPERATOR_KEY` | Optional shared key for all write operations |
+| `COOKIE_SECURE` | Set `true` behind HTTPS; production always uses secure cookies |
 
-If `OPERATOR_KEY` is configured, use the key icon in the top bar to enter it. It is kept in that browser tab's session storage. Read-only API/projector access stays public. This is a small event-control application with optional shared operator access, not a multi-tenant identity platform. Use trusted event Wi-Fi; use HTTPS and an operator key when exposing it outside that network. The development database binds to localhost only.
+Quiz Masters register with an email address or international phone number and a password. Each account can access only its own quizzes. Projector links remain public and read-only. See [account setup and migration](docs/accounts.md). The development database binds to localhost only.
 
 On another device on the same local network, open `http://<host-computer-LAN-IP>:5173`. The computer running the server must stay on, and the firewall must allow the app port. A phone browser and projector can use separate devices on this network. Internet access is not required once dependencies are installed. Local database failures disable further writes until the unconfirmed command has been retried.
 

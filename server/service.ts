@@ -30,32 +30,40 @@ const include = {
   rounds: { orderBy: { order: 'asc' as const } },
   events: { orderBy: { sequence: 'asc' as const } },
 };
-export async function getQuiz(id: string) {
-  const quiz = await db.quiz.findUnique({ where: { id }, include });
+export async function getQuiz(id: string, ownerId?: string) {
+  const quiz = await db.quiz.findUnique({
+    where: { id, ...(ownerId ? { ownerId } : {}) },
+    include,
+  });
   if (!quiz) throw new HttpError(404, 'This quiz could not be found.');
   return quiz;
 }
-export async function createQuiz(draft: Draft = defaultDraft()) {
+export async function createQuiz(draft: Draft = defaultDraft(), ownerId?: string) {
   return db.quiz.create({
-    data: { name: draft.name || 'Untitled quiz', draft: json(draft), state: json(emptyState()) },
+    data: {
+      ownerId,
+      name: draft.name || 'Untitled quiz',
+      draft: json(draft),
+      state: json(emptyState()),
+    },
     include,
   });
 }
 
-export async function command(quizId: string, body: unknown) {
+export async function command(quizId: string, body: unknown, ownerId?: string) {
   const { requestId, version, action } = commandSchema.parse(body);
   await db.$transaction(
     async (tx) => {
       // PostgreSQL's row lock serializes every mutation for this quiz, including undo.
       await tx.$queryRaw`SELECT id FROM "Quiz" WHERE id = ${quizId} FOR UPDATE`;
+      const q = await tx.quiz.findUnique({ where: { id: quizId }, include });
+      if (!q || (ownerId && q.ownerId !== ownerId)) throw new HttpError(404, 'Quiz not found.');
       const previous = await tx.command.findUnique({ where: { id: requestId } });
       if (previous) {
         if (previous.quizId !== quizId || !isDeepStrictEqual(previous.payload, action))
           fail('Request ID already used for a different action.');
         return;
       }
-      const q = await tx.quiz.findUnique({ where: { id: quizId }, include });
-      if (!q) throw new HttpError(404, 'Quiz not found.');
       if (q.version !== version)
         fail(
           'The quiz changed in another window. The latest state has been loaded; check it before trying again.',
@@ -406,7 +414,7 @@ export async function command(quizId: string, body: unknown) {
   return getQuiz(quizId);
 }
 
-export async function createDemo() {
+export async function createDemo(ownerId?: string) {
   const d = defaultDraft();
   d.name = 'CodeSphere Tech Quiz 2026';
   d.master = 'Alex Morgan';
@@ -418,9 +426,13 @@ export async function createDemo() {
     { name: 'Logic Legends', members: ['Priya', 'Dev'] },
     { name: 'Syntax Squad', members: ['Nisha', 'Rohan'] },
   ];
-  let q = await createQuiz(d);
+  let q = await createQuiz(d, ownerId);
   const act = async (action: unknown) => {
-    q = await command(q.id, { requestId: crypto.randomUUID(), version: q.version, action });
+    q = await command(
+      q.id,
+      { requestId: crypto.randomUUID(), version: q.version, action },
+      ownerId,
+    );
   };
   await act({ type: 'ready', draft: d });
   await act({ type: 'start' });

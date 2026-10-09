@@ -8,12 +8,13 @@ interface Pending {
   version: number;
   action: Action;
 }
-export function useQuiz(id: string) {
+export function useQuiz(id: string, projector = false) {
   const [quiz, setQuiz] = useState<Quiz | null>(null);
   const [error, setError] = useState('');
   const [online, setOnline] = useState(true);
   const [busy, setBusy] = useState(false);
   const [pending, setPending] = useState<Pending | null>(() => {
+    if (projector) return null;
     try {
       return JSON.parse(sessionStorage.getItem(`pending:${id}`) || 'null');
     } catch {
@@ -30,13 +31,13 @@ export function useQuiz(id: string) {
   }, []);
   const refresh = useCallback(async () => {
     try {
-      accept(await getQuiz(id));
+      accept(await getQuiz(id, projector));
       setOnline(true);
     } catch (e) {
       setOnline(false);
       setError((e as Error).message);
     }
-  }, [id, accept]);
+  }, [id, accept, projector]);
   useEffect(() => {
     void refresh();
     void syncClock().catch(() => {});
@@ -46,7 +47,7 @@ export function useQuiz(id: string) {
     return () => clearInterval(timer);
   }, [refresh]);
   const send = async (body: Pending) => {
-    if (locked.current) return false;
+    if (projector || locked.current) return false;
     locked.current = true;
     setBusy(true);
     setError('');

@@ -1,4 +1,4 @@
-import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
+import { test, expect, type APIRequestContext, type Page } from './fixtures.js';
 
 test('a lost scoring response survives refresh and retries without double-awarding', async ({
   page,
@@ -198,6 +198,8 @@ test('demo layout has no page overflow at mobile, tablet and desktop sizes', asy
         await page.screenshot({ path: `test-results/dashboard-${width}.png`, fullPage: true });
     }
     await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.getByLabel('Bounce rotation').click();
+    await expect(page.getByLabel('Bounce rotation')).toBeChecked();
     await page.getByRole('button', { name: 'Bounce question', exact: true }).click();
     await page
       .getByRole('combobox', { name: 'Bounce to', exact: true })
@@ -212,7 +214,7 @@ test('demo layout has no page overflow at mobile, tablet and desktop sizes', asy
       .getByRole('button', { name: 'Bonus +10', exact: true })
       .click();
     await expect(page.locator('.team-card .score-btn.bonus:enabled')).toHaveCount(0);
-    await expect(page.getByLabel('Next direct team · override anytime')).toHaveValue(
+    await expect(page.getByLabel('Next direct team (override anytime)')).toHaveValue(
       quiz.teams[5].id,
     );
     await page.getByRole('button', { name: 'Score history', exact: true }).click();

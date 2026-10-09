@@ -5,7 +5,7 @@ import {
   CalendarDays,
   Check,
   CircleAlert,
-  KeyRound,
+  LogOut,
   Monitor,
   Plus,
   Radio,
@@ -17,19 +17,14 @@ import {
 } from 'lucide-react';
 import type { Quiz, QuizListItem } from '../shared/types';
 import { api } from './api';
+import { AuthGate, useAuth } from './auth';
 import { useQuiz } from './useQuiz';
-import { Brand, Confirm, Field, Loading, Modal } from './components/ui';
+import { Brand, Confirm, Loading } from './components/ui';
 import { Setup } from './components/Setup';
 import { Dashboard, Projector } from './components/Dashboard';
-function Header({
-  online = true,
-  busy = false,
-  onKey,
-}: {
-  online?: boolean;
-  busy?: boolean;
-  onKey: () => void;
-}) {
+function Header({ online = true, busy = false }: { online?: boolean; busy?: boolean }) {
+  const { user, logout } = useAuth();
+  const [logoutError, setLogoutError] = useState('');
   return (
     <header className="site-header">
       <div className="header-inner">
@@ -40,38 +35,22 @@ function Header({
             {!online ? 'Reconnecting' : busy ? 'Saving changes…' : 'Connected & saved'}
           </span>
           <span className="header-divider" />
-          <button className="icon-btn" aria-label="Operator access" onClick={onKey}>
-            <KeyRound size={18} />
+          <span className="account-name">{user?.name}</span>
+          <button
+            className="icon-btn"
+            aria-label="Sign out"
+            onClick={() => void logout().catch((e: Error) => setLogoutError(e.message))}
+          >
+            <LogOut size={18} />
           </button>
-          <span className="operator-avatar">QM</span>
+          {logoutError && (
+            <span role="alert" className="red">
+              {logoutError}
+            </span>
+          )}
         </div>
       </div>
     </header>
-  );
-}
-function OperatorKey({ onClose }: { onClose: () => void }) {
-  const [key, setKey] = useState(sessionStorage.getItem('operatorKey') || '');
-  return (
-    <Modal title="Operator access" onClose={onClose}>
-      <p className="muted">
-        If this server has an operator key, enter it here to enable quiz controls. The projector
-        remains read-only.
-      </p>
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          sessionStorage.setItem('operatorKey', key);
-          onClose();
-        }}
-      >
-        <Field label="Operator key">
-          <input type="password" autoFocus value={key} onChange={(e) => setKey(e.target.value)} />
-        </Field>
-        <div className="modal-actions">
-          <button className="btn primary">Save key</button>
-        </div>
-      </form>
-    </Modal>
   );
 }
 function Home() {
@@ -79,7 +58,6 @@ function Home() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const [key, setKey] = useState(false);
   const load = () => {
     setLoading(true);
     void api<QuizListItem[]>('/quizzes')
@@ -104,7 +82,7 @@ function Home() {
   };
   return (
     <>
-      <Header online={!error} busy={busy} onKey={() => setKey(true)} />
+      <Header online={!error} busy={busy} />
       <main className="page home">
         <div className="home-hero">
           <div>
@@ -252,7 +230,6 @@ function Home() {
         </div>
       </main>
       <Footer />
-      {key && <OperatorKey onClose={() => setKey(false)} />}
     </>
   );
 }
@@ -267,8 +244,10 @@ function Footer() {
   );
 }
 function QuizPage({ id, projector }: { id: string; projector: boolean }) {
-  const { quiz, error, setError, online, busy, pending, act, retry, refresh } = useQuiz(id);
-  const [key, setKey] = useState(false);
+  const { quiz, error, setError, online, busy, pending, act, retry, refresh } = useQuiz(
+    id,
+    projector,
+  );
   const [deleting, setDeleting] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const remove = async () => {
@@ -291,7 +270,7 @@ function QuizPage({ id, projector }: { id: string; projector: boolean }) {
   };
   return (
     <>
-      {!projector && <Header online={online} busy={busy} onKey={() => setKey(true)} />}{' '}
+      {!projector && <Header online={online} busy={busy} />}{' '}
       {(error || pending) && (
         <div className="page error-container">
           <div className="error-banner" role="alert">
@@ -337,8 +316,7 @@ function QuizPage({ id, projector }: { id: string; projector: boolean }) {
       ) : (
         <Loading />
       )}
-      {!projector && <Footer />}
-      {key && <OperatorKey onClose={() => setKey(false)} />}{' '}
+      {!projector && <Footer />}{' '}
       {deleting && (
         <Confirm
           title="Permanently delete this quiz?"
@@ -355,9 +333,10 @@ function QuizPage({ id, projector }: { id: string; projector: boolean }) {
 }
 export default function App() {
   const match = location.pathname.match(/^\/(quiz|projector)\/([^/]+)\/?$/);
-  return match ? (
-    <QuizPage key={match[2]} id={match[2]} projector={match[1] === 'projector'} />
-  ) : (
-    <Home />
+  const projector = match?.[1] === 'projector';
+  return (
+    <AuthGate publicView={projector}>
+      {match ? <QuizPage key={match[2]} id={match[2]} projector={projector} /> : <Home />}
+    </AuthGate>
   );
 }

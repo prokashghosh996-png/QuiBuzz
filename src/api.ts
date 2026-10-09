@@ -1,4 +1,8 @@
 import type { Quiz } from '../shared/types';
+let csrfToken: string | null = null;
+export const setCsrfToken = (value: string | null) => {
+  csrfToken = value;
+};
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -12,9 +16,10 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
   try {
     response = await fetch(`/api${path}`, {
       ...options,
+      credentials: 'same-origin',
       headers: {
         'Content-Type': 'application/json',
-        'x-operator-key': sessionStorage.getItem('operatorKey') || '',
+        ...(csrfToken ? { 'x-csrf-token': csrfToken } : {}),
         ...options.headers,
       },
       signal: AbortSignal.timeout(15000),
@@ -39,10 +44,15 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
       response.status,
     );
   }
-  if (!response.ok) throw new ApiError(data.error || 'The request failed.', response.status);
+  if (!response.ok) {
+    if (response.status === 401 && !path.startsWith('/auth/') && typeof window !== 'undefined')
+      window.dispatchEvent(new Event('quibuzz:session-expired'));
+    throw new ApiError(data.error || 'The request failed.', response.status);
+  }
   return data;
 }
-export const getQuiz = (id: string) => api<Quiz>(`/quizzes/${id}`);
+export const getQuiz = (id: string, projector = false) =>
+  api<Quiz>(projector ? `/projector/${id}` : `/quizzes/${id}`);
 export let serverOffset = 0;
 export async function syncClock() {
   const before = Date.now();
