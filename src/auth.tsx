@@ -152,14 +152,14 @@ function Login({ onSuccess }: { onSuccess: (response: AuthResponse) => void }) {
             label="Password"
             hint={
               register
-                ? 'Use at least 15 characters. Spaces and passphrases are welcome.'
+                ? 'Use at least 8 characters. Spaces and passphrases are welcome.'
                 : undefined
             }
           >
             <input
               required
               type="password"
-              minLength={register ? 15 : 1}
+              minLength={register ? 8 : 1}
               maxLength={128}
               autoComplete={register ? 'new-password' : 'current-password'}
               value={password}

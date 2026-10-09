@@ -7,7 +7,7 @@ test('register, sign out and sign in through the account screen', async ({
   request,
 }) => {
   const email = `screen-${crypto.randomUUID()}@example.com`;
-  const password = 'Screen workflow passphrase 2026';
+  const password = 'Test2026';
   let id: string | undefined;
   try {
     await page.goto('/');
@@ -27,6 +27,8 @@ test('register, sign out and sign in through the account screen', async ({
       const audience = await guest.newPage();
       await audience.goto(`/projector/${quizId}`);
       await expect(audience.locator('.projector')).toBeVisible();
+      await expect(audience.locator('.leader-players').first()).toBeVisible();
+      await expect(audience.locator('.leader-players').first()).not.toBeEmpty();
       await expect(audience.getByRole('button', { name: 'Sign in', exact: true })).toHaveCount(0);
       expect((await request.get(`/api/quizzes/${quizId}`)).status()).toBe(401);
     } finally {
@@ -50,4 +52,3 @@ test('register, sign out and sign in through the account screen', async ({
     }
   }
 });
-

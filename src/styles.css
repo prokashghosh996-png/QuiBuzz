@@ -3296,3 +3296,12 @@ tbody tr:last-child td {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+.projector .leader-name .leader-players {
+  font-size: clamp(0.75rem, 1.1vw, 1rem);
+  line-height: 1.4;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-transform: none;
+  letter-spacing: normal;
+}

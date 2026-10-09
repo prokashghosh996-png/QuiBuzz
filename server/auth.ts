@@ -28,7 +28,7 @@ const credentials = z.object({
 });
 const signup = credentials.extend({
   name: z.string().trim().min(2).max(100),
-  password: z.string().min(15).max(128),
+  password: z.string().min(8).max(128),
 });
 const digest = (value: string) => createHash('sha256').update(value).digest('hex');
 const csrf = (token: string) =>

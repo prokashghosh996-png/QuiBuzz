@@ -1,6 +1,14 @@
 import { Trophy, ArrowUpRight, Download } from 'lucide-react';
 import { standings, total, type Quiz } from '../../shared/types';
-export function Leaderboard({ quiz, compact = false }: { quiz: Quiz; compact?: boolean }) {
+export function Leaderboard({
+  quiz,
+  compact = false,
+  showPlayers = false,
+}: {
+  quiz: Quiz;
+  compact?: boolean;
+  showPlayers?: boolean;
+}) {
   return (
     <section className={`panel leaderboard ${compact ? 'compact' : ''}`}>
       <div className="section-heading">
@@ -19,6 +27,9 @@ export function Leaderboard({ quiz, compact = false }: { quiz: Quiz; compact?: b
             <span className={`avatar color-${team.initialOrder % 6}`}>{team.letter}</span>
             <div className="leader-name">
               <strong>{team.name || `Team ${team.letter}`}</strong>
+              {showPlayers && team.members.length > 0 && (
+                <small className="leader-players">{team.members.join(' - ')}</small>
+              )}
               <small>
                 Team {team.letter}
                 {tied ? ' · Tied' : ''}

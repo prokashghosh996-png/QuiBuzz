@@ -40,7 +40,7 @@ app.use('/api/auth', auth);
 app.get('/api/projector/:id', async (req, res) => {
   const quiz = await getQuiz(req.params.id);
   const draft = quiz.draft as unknown as Draft;
-  // Public audience data excludes private setup/member names and audit reasons.
+  // Public audience data excludes private setup and audit reasons.
   res.json({
     ...quiz,
     ownerId: undefined,
@@ -52,7 +52,6 @@ app.get('/api/projector/:id', async (req, res) => {
         master: round.master,
       })),
     },
-    teams: quiz.teams.map((team) => ({ ...team, members: [] })),
     events: quiz.events.map((event) => ({ ...event, reason: '', voidReason: null })),
   });
 });

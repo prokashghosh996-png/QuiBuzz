@@ -670,7 +670,7 @@ export function Projector({ quiz }: { quiz: Quiz }) {
         <p>Hosted by {roundMaster(quiz)}</p>
       </header>
       <div className="projector-layout">
-        <Leaderboard quiz={quiz} />
+        <Leaderboard quiz={quiz} showPlayers />
         <aside>
           <div className="panel projector-question">
             <span className="eyebrow">CURRENT QUESTION</span>
