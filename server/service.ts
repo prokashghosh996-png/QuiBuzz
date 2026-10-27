@@ -179,20 +179,49 @@ export async function command(quizId: string, body: unknown, ownerId?: string) {
             );
           if (
             action.type === 'score' &&
-            (action.scoreType === 'BONUS_CORRECT' || action.scoreType === 'DIRECT_CORRECT') &&
-            q.events.some(
+            (action.scoreType === 'BONUS_CORRECT' || action.scoreType === 'DIRECT_CORRECT')
+          ) {
+            const currentDirectBonusEvents = q.events.filter(
               (event) =>
                 !event.voidedAt &&
                 event.roundId === round.id &&
                 event.question === s.question &&
                 (event.type === 'DIRECT_CORRECT' || event.type === 'BONUS_CORRECT'),
-            )
-          )
-            fail(
-              action.scoreType === 'DIRECT_CORRECT'
-                ? 'Direct is closed: Direct or Bonus points were already awarded for this question.'
-                : 'Bonus is closed: Direct or Bonus points were already awarded for this question.',
             );
+            const awardedMarks = currentDirectBonusEvents.reduce(
+              (sum, event) => sum + event.marks,
+              0,
+            );
+            const remainingMarks = Math.max(0, q.positive - awardedMarks);
+            const directAlreadyAwarded = currentDirectBonusEvents.some(
+              (event) => event.type === 'DIRECT_CORRECT',
+            );
+
+            if (action.scoreType === 'DIRECT_CORRECT' && directAlreadyAwarded) {
+              fail('Direct is closed: Direct points were already awarded for this question.');
+            }
+
+            if (action.marks !== undefined) {
+              if (remainingMarks <= 0) {
+                fail(
+                  action.scoreType === 'DIRECT_CORRECT'
+                    ? 'Direct is closed: Direct or Bonus points were already awarded for this question.'
+                    : 'Bonus is closed: Direct or Bonus points were already awarded for this question.',
+                );
+              }
+              if (action.marks > remainingMarks) {
+                fail(
+                  `Cannot award ${action.marks} points. Only ${remainingMarks} points remain for this question.`,
+                );
+              }
+            } else if (awardedMarks > 0 || remainingMarks < q.positive) {
+              fail(
+                action.scoreType === 'DIRECT_CORRECT'
+                  ? 'Direct is closed: Direct or Bonus points were already awarded for this question.'
+                  : 'Bonus is closed: Direct or Bonus points were already awarded for this question.',
+              );
+            }
+          }
           await tx.scoreEvent.create({
             data: {
               quizId,
@@ -203,10 +232,20 @@ export async function command(quizId: string, body: unknown, ownerId?: string) {
               marks:
                 action.type === 'adjust'
                   ? action.marks
-                  : action.scoreType === 'POUNCE_WRONG'
-                    ? -q.negative
-                    : q.positive,
-              reason: action.type === 'adjust' ? action.reason : '',
+                  : action.marks !== undefined
+                    ? action.marks
+                    : action.scoreType === 'POUNCE_WRONG'
+                      ? -q.negative
+                      : q.positive,
+              reason:
+                action.type === 'adjust'
+                  ? action.reason
+                  : action.reason ||
+                    (action.marks !== undefined
+                      ? action.scoreType === 'DIRECT_CORRECT'
+                        ? 'Part Direct'
+                        : 'Part Bonus'
+                      : ''),
             },
           });
           if (

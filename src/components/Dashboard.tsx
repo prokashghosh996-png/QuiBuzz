@@ -17,6 +17,7 @@ import {
   Users,
   History as HistoryIcon,
   Maximize,
+  SlidersHorizontal,
   Zap,
 } from 'lucide-react';
 import {
@@ -43,6 +44,7 @@ function TeamCard({
   busy,
   onDetails,
   onAdjust,
+  onManualScore,
 }: {
   quiz: Quiz;
   team: Team;
@@ -50,6 +52,7 @@ function TeamCard({
   busy: boolean;
   onDetails: () => void;
   onAdjust: () => void;
+  onManualScore: () => void;
 }) {
   const [cooldown, setCooldown] = useState(false);
   const guard = useRef(false);
@@ -71,18 +74,24 @@ function TeamCard({
     quiz.rounds[quiz.state.roundIndex].id,
     quiz.state.question,
   );
-  const bonusClosed = quiz.events.some(
+  const currentRoundEvents = quiz.events.filter(
     (event) =>
       !event.voidedAt &&
       event.roundId === quiz.rounds[quiz.state.roundIndex].id &&
-      event.question === quiz.state.question &&
-      (event.type === 'DIRECT_CORRECT' || event.type === 'BONUS_CORRECT'),
+      event.question === quiz.state.question,
   );
+  const directBonusTotal = currentRoundEvents
+    .filter((e) => e.type === 'DIRECT_CORRECT' || e.type === 'BONUS_CORRECT')
+    .reduce((sum, e) => sum + e.marks, 0);
+  const remainingMarks = Math.max(0, quiz.positive - directBonusTotal);
+  const hasDirectAwarded = currentRoundEvents.some((e) => e.type === 'DIRECT_CORRECT');
+
   const award = async (scoreType: Exclude<ScoreType, 'MANUAL_ADJUSTMENT'>) => {
     if (
       guard.current ||
       hasScored ||
-      ((scoreType === 'DIRECT_CORRECT' || scoreType === 'BONUS_CORRECT') && bonusClosed)
+      (scoreType === 'DIRECT_CORRECT' && (hasDirectAwarded || remainingMarks < quiz.positive)) ||
+      (scoreType === 'BONUS_CORRECT' && (directBonusTotal > 0 || remainingMarks < quiz.positive))
     )
       return;
     guard.current = true;
@@ -131,10 +140,17 @@ function TeamCard({
       </div>
       <div className="score-actions">
         <button
-          disabled={busy || cooldown || hasScored || !direct || bonusClosed}
+          disabled={
+            busy ||
+            cooldown ||
+            hasScored ||
+            !direct ||
+            hasDirectAwarded ||
+            remainingMarks < quiz.positive
+          }
           title={
-            bonusClosed
-              ? 'Direct or Bonus points have already been awarded for this question'
+            hasDirectAwarded || remainingMarks < quiz.positive
+              ? 'Direct points have already been awarded for this question'
               : direct
                 ? undefined
                 : 'Only the current direct question team can receive Direct points'
@@ -145,9 +161,16 @@ function TeamCard({
           Direct <b>+{quiz.positive}</b>
         </button>
         <button
-          disabled={busy || cooldown || hasScored || direct || bonusClosed}
+          disabled={
+            busy ||
+            cooldown ||
+            hasScored ||
+            direct ||
+            directBonusTotal > 0 ||
+            remainingMarks < quiz.positive
+          }
           title={
-            bonusClosed
+            directBonusTotal > 0 || remainingMarks < quiz.positive
               ? 'Direct or Bonus points have already been awarded for this question'
               : direct
                 ? 'The direct question team cannot receive Bonus points'
@@ -175,8 +198,199 @@ function TeamCard({
           Pounce <b>−{quiz.negative}</b>
         </button>
       </div>
+      <div className="manual-score-action">
+        <button
+          type="button"
+          disabled={
+            busy ||
+            cooldown ||
+            hasScored ||
+            remainingMarks <= 0 ||
+            (direct && hasDirectAwarded)
+          }
+          title={
+            hasScored
+              ? 'This team already has a score for this question'
+              : remainingMarks <= 0
+                ? 'All points for this question have been awarded'
+                : direct && hasDirectAwarded
+                  ? 'Direct points have already been awarded for this question'
+                  : `Manual scoring: award 1 to ${remainingMarks} points`
+          }
+          className="score-btn manual"
+          onClick={onManualScore}
+        >
+          <SlidersHorizontal size={13} /> Manual Scoring
+        </button>
+      </div>
       {hasScored && <p className="muted">Scored for this question</p>}
     </article>
+  );
+}
+
+export function ManualScoreModal({
+  team,
+  quiz,
+  act,
+  busy,
+  onClose,
+}: {
+  team: Team;
+  quiz: Quiz;
+  act: Act;
+  busy: boolean;
+  onClose: () => void;
+}) {
+  const round = quiz.rounds[quiz.state.roundIndex];
+  const a = currentAssignment(quiz);
+  const direct = a.directTeamId === team.id;
+
+  const currentRoundEvents = quiz.events.filter(
+    (event) =>
+      !event.voidedAt &&
+      event.roundId === round.id &&
+      event.question === quiz.state.question,
+  );
+  const directBonusTotal = currentRoundEvents
+    .filter((e) => e.type === 'DIRECT_CORRECT' || e.type === 'BONUS_CORRECT')
+    .reduce((sum, e) => sum + e.marks, 0);
+  const remainingMarks = Math.max(0, quiz.positive - directBonusTotal);
+  const maxAllowed = Math.min(quiz.positive, remainingMarks);
+
+  const [marks, setMarks] = useState<number>(() => Math.max(1, maxAllowed));
+  const [scoreType, setScoreType] = useState<'DIRECT_CORRECT' | 'BONUS_CORRECT'>(
+    direct ? 'DIRECT_CORRECT' : 'BONUS_CORRECT',
+  );
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (marks < 1 || marks > maxAllowed) return;
+    const ok = await act({
+      type: 'score',
+      teamId: team.id,
+      scoreType,
+      marks,
+      reason: scoreType === 'DIRECT_CORRECT' ? 'Part Direct' : 'Part Bonus',
+    });
+    if (ok) onClose();
+  };
+
+  const chips = Array.from({ length: Math.min(maxAllowed, 10) }, (_, i) => i + 1);
+
+  return (
+    <Modal title={`Manual Scoring — Team ${team.letter}`} onClose={onClose}>
+      <p className="muted">
+        Award partial marks for {teamLabel(team)} on {round.name}, Question {quiz.state.question}.
+      </p>
+
+      <div className="manual-score-banner">
+        <div className="manual-score-meta">
+          <span className="eyebrow">QUESTION MAXIMUM</span>
+          <strong>{quiz.positive} pts total</strong>
+        </div>
+        <div className="manual-score-meta right">
+          <span className="eyebrow">AVAILABLE MARKS</span>
+          <strong className={remainingMarks > 0 ? 'green' : 'red'}>
+            {remainingMarks} pts left
+          </strong>
+        </div>
+      </div>
+
+      <form className="form-stack" onSubmit={submit}>
+        <Field
+          label={`1. How much score will be added? (1 to ${maxAllowed})`}
+          hint={`Select a quick amount or enter points from 1 to ${maxAllowed}.`}
+        >
+          {maxAllowed > 0 && (
+            <div className="quick-points-chips">
+              {chips.map((num) => (
+                <button
+                  key={num}
+                  type="button"
+                  className={`point-chip ${marks === num ? 'active' : ''}`}
+                  onClick={() => setMarks(num)}
+                >
+                  +{num}
+                </button>
+              ))}
+            </div>
+          )}
+          <input
+            type="number"
+            required
+            min={1}
+            max={maxAllowed}
+            value={marks}
+            onChange={(e) => {
+              const val = Number(e.target.value);
+              if (!Number.isNaN(val)) setMarks(val);
+            }}
+          />
+        </Field>
+
+        <Field
+          label="2. Scoring category"
+          hint="Role strictly enforced: Direct team receives Part Direct, other teams receive Part Bonus."
+        >
+          <div className="manual-type-selector">
+            <label
+              className={`manual-type-option ${scoreType === 'DIRECT_CORRECT' ? 'selected' : ''} ${!direct ? 'disabled' : ''}`}
+            >
+              <input
+                type="radio"
+                name="manualScoreType"
+                value="DIRECT_CORRECT"
+                checked={scoreType === 'DIRECT_CORRECT'}
+                disabled={!direct}
+                onChange={() => setScoreType('DIRECT_CORRECT')}
+              />
+              <div className="manual-type-text">
+                <strong>Part Direct</strong>
+                <small>
+                  {direct
+                    ? 'Award partial direct points'
+                    : 'Disabled: Only direct team can receive Part Direct'}
+                </small>
+              </div>
+            </label>
+
+            <label
+              className={`manual-type-option ${scoreType === 'BONUS_CORRECT' ? 'selected' : ''} ${direct ? 'disabled' : ''}`}
+            >
+              <input
+                type="radio"
+                name="manualScoreType"
+                value="BONUS_CORRECT"
+                checked={scoreType === 'BONUS_CORRECT'}
+                disabled={direct}
+                onChange={() => setScoreType('BONUS_CORRECT')}
+              />
+              <div className="manual-type-text">
+                <strong>Part Bonus</strong>
+                <small>
+                  {!direct
+                    ? 'Award partial bonus points'
+                    : 'Disabled: Direct team cannot receive Bonus'}
+                </small>
+              </div>
+            </label>
+          </div>
+        </Field>
+
+        <div className="modal-actions">
+          <button type="button" className="btn" onClick={onClose}>
+            Cancel
+          </button>
+          <button
+            type="submit"
+            className="btn primary"
+            disabled={busy || marks < 1 || marks > maxAllowed}
+          >
+            Award +{marks} points ({scoreType === 'DIRECT_CORRECT' ? 'Part Direct' : 'Part Bonus'})
+          </button>
+        </div>
+      </form>
+    </Modal>
   );
 }
 export function Dashboard({
@@ -197,6 +411,7 @@ export function Dashboard({
   const [confirm, setConfirm] = useState<'round' | 'end' | null>(null);
   const [details, setDetails] = useState<Team | null>(null);
   const [adjust, setAdjust] = useState<Team | null>(null);
+  const [manualScoreTeam, setManualScoreTeam] = useState<Team | null>(null);
   const round = quiz.rounds[quiz.state.roundIndex],
     a = currentAssignment(quiz),
     live = quiz.status === 'LIVE';
@@ -521,6 +736,7 @@ export function Dashboard({
                     busy={busy}
                     onDetails={() => setDetails(t)}
                     onAdjust={() => setAdjust(t)}
+                    onManualScore={() => setManualScoreTeam(t)}
                   />
                 ))}
               </div>
@@ -626,6 +842,15 @@ export function Dashboard({
           act={act}
           busy={busy}
           onClose={() => setAdjust(null)}
+        />
+      )}
+      {manualScoreTeam && (
+        <ManualScoreModal
+          team={manualScoreTeam}
+          quiz={quiz}
+          act={act}
+          busy={busy}
+          onClose={() => setManualScoreTeam(null)}
         />
       )}
     </main>

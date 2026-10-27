@@ -53,6 +53,8 @@ export const actionSchema = z.discriminatedUnion('type', [
     type: z.literal('score'),
     teamId: id,
     scoreType: z.enum(['DIRECT_CORRECT', 'BONUS_CORRECT', 'POUNCE_CORRECT', 'POUNCE_WRONG']),
+    marks: z.number().int().min(1).max(10000).optional(),
+    reason: z.string().trim().max(500).optional(),
   }),
   z.object({
     type: z.literal('adjust'),
