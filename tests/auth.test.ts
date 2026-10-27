@@ -29,6 +29,12 @@ test('accounts isolate quiz access, enforce CSRF, and revoke sessions', async ()
     return { ...data, cookie: r.headers.get('set-cookie')!.split(';')[0] };
   };
   try {
+    const healthResponse = await call('/health');
+    assert.equal(healthResponse.status, 200);
+    const health = await healthResponse.json();
+    assert.equal(health.ok, true);
+    assert.equal(health.service, 'quibuzz-api');
+    assert.equal((await call('/auth/me')).status, 200);
     assert.equal((await call('/quizzes')).status, 401);
     const email = `account-${randomUUID()}@example.com`;
     const a = await register(email.toUpperCase());

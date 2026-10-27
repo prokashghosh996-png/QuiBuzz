@@ -34,7 +34,12 @@ app.use('/api', (req, res, next) => {
 });
 app.get('/api/health', async (_req, res) => {
   await db.$queryRaw`SELECT 1`;
-  res.json({ ok: true, serverTime: Date.now(), authentication: 'accounts' });
+  res.json({
+    ok: true,
+    service: 'quibuzz-api',
+    serverTime: Date.now(),
+    authentication: 'accounts',
+  });
 });
 app.use('/api/auth', auth);
 app.get('/api/projector/:id', async (req, res) => {
