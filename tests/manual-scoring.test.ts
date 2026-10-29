@@ -206,3 +206,100 @@ test('bounce rule follows furthest team in rotation regardless of instruction se
   assert.equal(nextWrapAround, 'team-C');
 });
 
+
+test('anticlockwise bounce rotation moves to previous team of furthest scorer', () => {
+  const order = ['team-A', 'team-B', 'team-C', 'team-D', 'team-E', 'team-F', 'team-G'];
+  const directTeamId = 'team-G';
+  const roundId = 'round-2';
+  const question = 1;
+
+  // Direct team G answers directly -> next direct team is Team F (previous team in anticlockwise)
+  const eventDirectG = {
+    id: 'e-g',
+    teamId: 'team-G',
+    roundId,
+    question,
+    type: 'DIRECT_CORRECT',
+    marks: 10,
+    reason: 'Direct',
+    createdAt: new Date().toISOString(),
+    voidedAt: null,
+    voidReason: null,
+    replacesId: null,
+  };
+
+  const nextDirectG = resolveBounceNextTeamId(
+    order,
+    directTeamId,
+    [eventDirectG],
+    roundId,
+    question,
+    'ANTICLOCKWISE',
+  );
+  assert.equal(nextDirectG, 'team-F');
+
+  // Question bounces: Team E (+5) and Team C (+5) answer partial bonus.
+  // In anticlockwise from G: G (0) -> F (1) -> E (2) -> D (3) -> C (4).
+  // Team C is the furthest scorer in anticlockwise rotation (dist 4 vs 2).
+  // The next team is previous team of Team C -> Team B!
+  const eventBonusE = {
+    id: 'e-e',
+    teamId: 'team-E',
+    roundId,
+    question,
+    type: 'BONUS_CORRECT',
+    marks: 5,
+    reason: 'Part Bonus',
+    createdAt: new Date().toISOString(),
+    voidedAt: null,
+    voidReason: null,
+    replacesId: null,
+  };
+
+  const eventBonusC = {
+    id: 'e-c',
+    teamId: 'team-C',
+    roundId,
+    question,
+    type: 'BONUS_CORRECT',
+    marks: 5,
+    reason: 'Part Bonus',
+    createdAt: new Date().toISOString(),
+    voidedAt: null,
+    voidReason: null,
+    replacesId: null,
+  };
+
+  // Entered E first, C later
+  const nextEthenC = resolveBounceNextTeamId(
+    order,
+    directTeamId,
+    [eventBonusE, eventBonusC],
+    roundId,
+    question,
+    'ANTICLOCKWISE',
+  );
+  assert.equal(nextEthenC, 'team-B');
+
+  // Entered C first, E later (instruction sequence independence)
+  const nextCthenE = resolveBounceNextTeamId(
+    order,
+    directTeamId,
+    [eventBonusC, eventBonusE],
+    roundId,
+    question,
+    'ANTICLOCKWISE',
+  );
+  assert.equal(nextCthenE, 'team-B');
+
+  // No scores recorded -> defaults to direct team G -> next is Team F
+  const nextUnanswered = resolveBounceNextTeamId(
+    order,
+    directTeamId,
+    [],
+    roundId,
+    question,
+    'ANTICLOCKWISE',
+  );
+  assert.equal(nextUnanswered, 'team-F');
+});

@@ -261,3 +261,82 @@ test('PostgreSQL bounce rotation for part bonus and part direct is independent o
     await db.$disconnect();
   }
 });
+
+test('PostgreSQL round rotation direction supports clockwise and anticlockwise rounds', async () => {
+  const d = defaultDraft();
+  d.name = 'Direction test quiz';
+  d.bounceEnabled = true;
+  d.master = 'Test host';
+  d.teams = Array.from({ length: 6 }, (_, i) => ({
+    name: `Team ${teamLetter(i)}`,
+    members: [`Member ${i + 1}`],
+  }));
+  d.rounds = [
+    { name: 'Round 1 (Clockwise)', questions: 3, direction: 'CLOCKWISE' },
+    { name: 'Round 2 (Anticlockwise)', questions: 3, direction: 'ANTICLOCKWISE' },
+  ];
+  let q = await createQuiz(d);
+  const act = async (action: unknown) => {
+    q = await command(q.id, { requestId: crypto.randomUUID(), version: q.version, action });
+  };
+  try {
+    await act({ type: 'ready', draft: d });
+    await act({ type: 'start' });
+
+    // Round 1 is CLOCKWISE
+    // Direct question 1 is Team A (teams[0]).
+    // Next team in clockwise direction is Team B (teams[1]).
+    assert.equal((q as unknown as Quiz).state.assignments['0:1'].nextTeamId, q.teams[1].id);
+    await act({ type: 'score', teamId: q.teams[0].id, scoreType: 'DIRECT_CORRECT', marks: 10 });
+    assert.equal((q as unknown as Quiz).state.assignments['0:1'].nextTeamId, q.teams[1].id);
+
+    // Navigate to Question 2 -> Direct is Team B (teams[1])
+    await act({ type: 'navigate', delta: 1 });
+    assert.equal((q as unknown as Quiz).state.assignments['0:2'].directTeamId, q.teams[1].id);
+
+    // Complete Round 1 and advance to Round 2 (ANTICLOCKWISE)
+    await act({ type: 'completeRound' });
+    await act({ type: 'nextRound', direction: 'ANTICLOCKWISE' });
+    assert.equal((q as unknown as Quiz).state.roundIndex, 1);
+
+    // In Round 2 (ANTICLOCKWISE):
+    // Direct question 1 starts at Team A (teams[0]).
+    // Previous team of Team A in anticlockwise is Team F (teams[5])!
+    assert.equal((q as unknown as Quiz).state.assignments['1:1'].nextTeamId, q.teams[5].id);
+
+    // User switches direct team to Team F (teams[5])
+    await act({ type: 'assign', target: 'directTeamId', teamId: q.teams[5].id });
+    // In anticlockwise from Team F, next direct team is Team E (teams[4])
+    assert.equal((q as unknown as Quiz).state.assignments['1:1'].nextTeamId, q.teams[4].id);
+
+    // Team F answers directly
+    await act({ type: 'score', teamId: q.teams[5].id, scoreType: 'DIRECT_CORRECT', marks: 10 });
+    assert.equal((q as unknown as Quiz).state.assignments['1:1'].nextTeamId, q.teams[4].id);
+
+    // Navigate to Question 2 -> Direct is Team E (teams[4])
+    await act({ type: 'navigate', delta: 1 });
+    assert.equal((q as unknown as Quiz).state.question, 2);
+    assert.equal((q as unknown as Quiz).state.assignments['1:2'].directTeamId, q.teams[4].id);
+
+    // On Question 2:
+    // Anticlockwise from E (teams[4]): D (dist 1), C (dist 2), B (dist 3).
+    // Question bounces: Team D (teams[3]) gets +5 part bonus, Team C (teams[2]) gets +5 part bonus.
+    // Last team in anticlockwise rotation is Team C. Previous team of Team C is Team B (teams[1])!
+    await act({ type: 'score', teamId: q.teams[2].id, scoreType: 'BONUS_CORRECT', marks: 5 });
+    await act({ type: 'score', teamId: q.teams[3].id, scoreType: 'BONUS_CORRECT', marks: 5 });
+    assert.equal((q as unknown as Quiz).state.assignments['1:2'].nextTeamId, q.teams[1].id);
+
+    // Toggle direction mid-round to CLOCKWISE:
+    await act({ type: 'roundDirection', direction: 'CLOCKWISE' });
+    // In clockwise from E: E (0), F (1), A (2), B (3), C (4), D (5).
+    // Furthest team was Team D. In clockwise from D, next team is E!
+    assert.equal((q as unknown as Quiz).state.assignments['1:2'].nextTeamId, q.teams[4].id);
+
+    // Toggle back to ANTICLOCKWISE:
+    await act({ type: 'roundDirection', direction: 'ANTICLOCKWISE' });
+    assert.equal((q as unknown as Quiz).state.assignments['1:2'].nextTeamId, q.teams[1].id);
+  } finally {
+    await db.quiz.delete({ where: { id: q.id } });
+    await db.$disconnect();
+  }
+});

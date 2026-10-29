@@ -776,6 +776,69 @@ small {
   background: #897dec;
   transition: width 0.2s;
 }
+.round-direction-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  background: #f7f6fc;
+  border: 1px solid #e9e6f7;
+  border-radius: 9px;
+  margin-bottom: 16px;
+}
+.direction-label-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.direction-label-group .eyebrow {
+  font-size: 8px;
+  letter-spacing: 1.2px;
+  color: #8c8fa2;
+  font-weight: 700;
+}
+.direction-hint {
+  font-size: 11px;
+  color: #554e7d;
+  font-weight: 500;
+}
+.direction-toggle-group {
+  display: inline-flex;
+  background: #eceaf6;
+  padding: 3px;
+  border-radius: 8px;
+  gap: 2px;
+}
+.direction-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  background: transparent;
+  color: #6d668f;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+.direction-btn:hover:not(:disabled) {
+  color: #3b3363;
+  background: rgba(255, 255, 255, 0.5);
+}
+.direction-btn.is-active {
+  background: #ffffff;
+  color: var(--primary, #5a45d4);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+.direction-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .question-selects {
   display: grid;
   grid-template-columns: 1fr 20px 1fr;
@@ -1247,11 +1310,11 @@ small {
   margin-left: auto;
 }
 .history-panel.compact .text-btn {
-  font-size: 9px;
+  font-size: 13px;
 }
 .activity-row {
   display: flex;
-  gap: 10px;
+  gap: 12px;
   padding: 14px 0;
   border-bottom: 1px solid #f0f0f6;
   align-items: flex-start;
@@ -1259,39 +1322,53 @@ small {
 .activity-row:last-child {
   border-bottom: 0;
 }
+.activity-row .avatar.small {
+  width: 32px;
+  height: 32px;
+  font-size: 12px;
+  font-weight: 700;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
 .activity-main {
   flex: 1;
   min-width: 0;
 }
 .activity-main > strong {
-  font-size: 12px;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.3;
   display: block;
   overflow-wrap: anywhere;
 }
 .activity-main > span {
   display: block;
-  color: #9292a8;
-  font-size: 11px;
+  color: #9f9fb5;
+  font-size: 13px;
+  line-height: 1.35;
   margin-top: 3px;
 }
 .activity-main > small {
   display: block;
-  color: #8b869e;
+  color: #938ea5;
+  font-size: 12px;
+  line-height: 1.4;
   margin-top: 4px;
   overflow-wrap: anywhere;
 }
 .activity-main > time {
   display: block;
-  font-size: 9px;
+  font-size: 11px;
   color: #aba9b8;
   margin-top: 4px;
   font-variant-numeric: tabular-nums;
 }
 .activity-row > b {
   font:
-    650 14px 'Manrope Variable',
+    700 17px 'Manrope Variable',
     sans-serif;
-  padding-top: 3px;
+  padding-top: 2px;
+  white-space: nowrap;
 }
 .activity-row.voided {
   opacity: 0.55;
@@ -1301,27 +1378,37 @@ small {
 }
 .compact .activity-row {
   padding: 10px 0;
-  gap: 9px;
+  gap: 10px;
+}
+.compact .activity-row .avatar.small {
+  width: 28px;
+  height: 28px;
+  font-size: 10.5px;
+  border-radius: 7px;
+  flex-shrink: 0;
 }
 .compact .activity-main > strong {
-  font-size: 10px;
+  font-size: 13.5px;
+  line-height: 1.3;
 }
 .compact .activity-main > span {
-  font-size: 8px;
+  font-size: 12px;
+  line-height: 1.3;
 }
 .compact .activity-main > time {
-  font-size: 7px;
+  font-size: 10.5px;
 }
 .compact .activity-main > small {
-  font-size: 8px;
+  font-size: 11.5px;
+  line-height: 1.35;
 }
 .compact .activity-row > b {
-  font-size: 11px;
+  font-size: 15px;
 }
 .compact .avatar.small {
-  width: 24px;
-  height: 24px;
-  font-size: 8px;
+  width: 28px;
+  height: 28px;
+  font-size: 10.5px;
 }
 .shortcut-note {
   padding: 0 5px;
@@ -1567,7 +1654,8 @@ input[type='checkbox'] {
 }
 .round-form {
   display: grid;
-  grid-template-columns: 32px 1fr 100px;
+  grid-template-columns: 32px 1.5fr 1.2fr 85px auto;
+  align-items: end;
   gap: 17px;
   align-items: center;
 }
@@ -1870,7 +1958,7 @@ tbody tr:last-child td {
   max-width: 400px;
 }
 .search input {
-  font-size: 12px;
+  font-size: 13px;
 }
 .search > svg {
   color: #aaa0b9;
@@ -1879,7 +1967,7 @@ tbody tr:last-child td {
   display: flex;
   align-items: center;
   gap: 7px;
-  font-size: 11px;
+  font-size: 13px;
   color: #9b91ab;
 }
 .entry-actions {
@@ -1924,10 +2012,10 @@ tbody tr:last-child td {
   align-items: center;
   padding: 30px 10px;
   color: #b1a8bd;
-  font-size: 11px;
+  font-size: 13px;
 }
 .empty-small strong {
-  font-size: 12px;
+  font-size: 14px;
   margin: 12px 0 6px;
   color: #958aa5;
 }
@@ -2911,16 +2999,16 @@ tbody tr:last-child td {
     padding: 11px 8px;
   }
   .compact .activity-main > strong {
-    font-size: 12px;
+    font-size: 13px;
   }
   .compact .activity-main > span {
-    font-size: 10px;
+    font-size: 11.5px;
   }
   .compact .activity-main > time {
-    font-size: 9px;
+    font-size: 10px;
   }
   .compact .activity-row > b {
-    font-size: 13px;
+    font-size: 14px;
   }
   .teams-heading {
     gap: 8px;
@@ -3051,16 +3139,16 @@ tbody tr:last-child td {
   font-size: 10px;
 }
 .compact .activity-main > strong {
-  font-size: 11px;
+  font-size: 13.5px;
 }
 .compact .activity-main > span {
-  font-size: 10px;
+  font-size: 12px;
 }
 .compact .activity-main > time {
-  font-size: 9px;
+  font-size: 10.5px;
 }
 .compact .activity-row > b {
-  font-size: 13px;
+  font-size: 15px;
 }
 .btn {
   font-size: 12px;

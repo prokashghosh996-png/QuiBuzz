@@ -4,13 +4,16 @@ import { db } from './db.js';
 import {
   defaultDraft,
   emptyState,
-  followingTeam,
+  getNonBounceDirectTeam,
+  getNonBounceNextTeam,
   hasQuestionScore,
+  nextTeamInDirection,
   questionKey,
   resolveBounceNextTeamId,
   teamLetter,
   type Draft,
   type LiveState,
+  type RotationDirection,
 } from '../shared/types.js';
 import { commandSchema } from '../shared/validation.js';
 
@@ -94,13 +97,25 @@ export async function command(quizId: string, body: unknown, ownerId?: string) {
       const resetTimer = () => {
         s.timer = { remainingMs: q.pounceSeconds * 1000, endsAt: null };
       };
+      const currentRound = () => q.rounds[s.roundIndex];
+      const currentDirection = (roundId?: string): RotationDirection => {
+        const targetRoundId = roundId ?? currentRound()?.id;
+        if (targetRoundId && s.roundDirections?.[targetRoundId]) {
+          return s.roundDirections[targetRoundId];
+        }
+        const roundIdx = targetRoundId
+          ? q.rounds.findIndex((r) => r.id === targetRoundId)
+          : s.roundIndex;
+        return (q.draft as unknown as Draft).rounds[roundIdx]?.direction || 'CLOCKWISE';
+      };
       const initQuestion = (direct: string) => {
+        const dir = currentDirection();
         s.assignments[questionKey(s)] ??= {
           directTeamId: direct,
           nextTeamId:
             s.bounceEnabled === false
-              ? s.order[s.question % s.order.length]
-              : followingTeam(s.order, direct),
+              ? getNonBounceNextTeam(s.order, s.question, dir)
+              : nextTeamInDirection(s.order, direct, dir),
           bounceTeamId: null,
         };
       };
@@ -132,12 +147,19 @@ export async function command(quizId: string, body: unknown, ownerId?: string) {
                 },
               }),
             );
+          const createdRounds = [];
           for (const [i, r] of d.rounds.entries())
-            await tx.round.create({
-              data: { quizId, name: r.name.trim(), questions: r.questions, order: i },
-            });
+            createdRounds.push(
+              await tx.round.create({
+                data: { quizId, name: r.name.trim(), questions: r.questions, order: i },
+              }),
+            );
           s.bounceEnabled = d.bounceEnabled ?? true;
           s.order = teams.map((t) => t.id);
+          s.roundDirections = {};
+          for (const [i, r] of d.rounds.entries()) {
+            s.roundDirections[createdRounds[i].id] = r.direction || 'CLOCKWISE';
+          }
           s.roundIndex = 0;
           s.question = 1;
           initQuestion(s.order[0]);
@@ -269,6 +291,7 @@ export async function command(quizId: string, body: unknown, ownerId?: string) {
               ],
               round.id,
               s.question,
+              currentDirection(),
             );
           break;
         }
@@ -290,6 +313,7 @@ export async function command(quizId: string, body: unknown, ownerId?: string) {
               updatedEvents,
               round.id,
               s.question,
+              currentDirection(),
             );
           }
           break;
@@ -333,6 +357,7 @@ export async function command(quizId: string, body: unknown, ownerId?: string) {
               updatedEvents,
               round.id,
               s.question,
+              currentDirection(),
             );
           }
           break;
@@ -341,9 +366,10 @@ export async function command(quizId: string, body: unknown, ownerId?: string) {
           live();
           const next = s.question + action.delta;
           if (next < 1 || next > round.questions) fail('Question is outside the current round.');
+          const dir = currentDirection();
           const direct =
             s.bounceEnabled === false
-              ? s.order[(next - 1) % s.order.length]
+              ? getNonBounceDirectTeam(s.order, next, dir)
               : assignment().nextTeamId;
           s.question = next;
           initQuestion(direct);
@@ -353,6 +379,7 @@ export async function command(quizId: string, body: unknown, ownerId?: string) {
         case 'bounceMode': {
           started();
           s.bounceEnabled = action.enabled;
+          const dir = currentDirection();
           assignment().nextTeamId = action.enabled
             ? resolveBounceNextTeamId(
                 s.order,
@@ -360,8 +387,9 @@ export async function command(quizId: string, body: unknown, ownerId?: string) {
                 q.events,
                 round.id,
                 s.question,
+                dir,
               )
-            : s.order[s.question % s.order.length];
+            : getNonBounceNextTeam(s.order, s.question, dir);
           break;
         }
         case 'assign':
@@ -377,6 +405,7 @@ export async function command(quizId: string, body: unknown, ownerId?: string) {
               q.events,
               round.id,
               s.question,
+              currentDirection(),
             );
           break;
         case 'order': {
@@ -388,15 +417,17 @@ export async function command(quizId: string, body: unknown, ownerId?: string) {
           )
             fail('Team order must include each team exactly once.');
           s.order = action.order;
+          const dir = currentDirection();
           assignment().nextTeamId =
             s.bounceEnabled === false
-              ? s.order[s.question % s.order.length]
+              ? getNonBounceNextTeam(s.order, s.question, dir)
               : resolveBounceNextTeamId(
                   s.order,
                   assignment().directTeamId,
                   q.events,
                   round.id,
                   s.question,
+                  dir,
                 );
           break;
         }
@@ -417,6 +448,27 @@ export async function command(quizId: string, body: unknown, ownerId?: string) {
           if (!q.rounds.some((r) => r.id === action.roundId))
             fail('Round does not belong to this quiz.');
           s.roundMasters = { ...s.roundMasters, [action.roundId]: action.master };
+          break;
+        }
+        case 'roundDirection': {
+          started();
+          const targetRoundId = action.roundId || round.id;
+          if (!q.rounds.some((r) => r.id === targetRoundId))
+            fail('Round does not belong to this quiz.');
+          s.roundDirections = { ...s.roundDirections, [targetRoundId]: action.direction };
+          if (targetRoundId === round.id) {
+            assignment().nextTeamId =
+              s.bounceEnabled === false
+                ? getNonBounceNextTeam(s.order, s.question, action.direction)
+                : resolveBounceNextTeamId(
+                    s.order,
+                    assignment().directTeamId,
+                    q.events,
+                    round.id,
+                    s.question,
+                    action.direction,
+                  );
+          }
           break;
         }
         case 'settings': {
@@ -445,8 +497,11 @@ export async function command(quizId: string, body: unknown, ownerId?: string) {
             break;
           }
           s.roundIndex++;
+          const nextR = q.rounds[s.roundIndex];
           if (action.master)
-            s.roundMasters = { ...s.roundMasters, [q.rounds[s.roundIndex].id]: action.master };
+            s.roundMasters = { ...s.roundMasters, [nextR.id]: action.master };
+          if (action.direction)
+            s.roundDirections = { ...s.roundDirections, [nextR.id]: action.direction };
           s.question = 1;
           initQuestion(s.order[0]);
           resetTimer();
@@ -470,6 +525,8 @@ export async function command(quizId: string, body: unknown, ownerId?: string) {
             data: { quizId, name: `Tie-break ${number}`, questions: 1, order: q.rounds.length },
           });
           if (action.master) s.roundMasters = { ...s.roundMasters, [tieRound.id]: action.master };
+          if (action.direction)
+            s.roundDirections = { ...s.roundDirections, [tieRound.id]: action.direction };
           s.roundIndex = q.rounds.length;
           s.question = 1;
           initQuestion(s.order[0]);

@@ -19,14 +19,18 @@ import {
   Maximize,
   SlidersHorizontal,
   Zap,
+  RotateCw,
+  RotateCcw,
 } from 'lucide-react';
 import {
   currentAssignment,
   hasQuestionScore,
   roundMaster,
+  roundDirection,
   total,
   teamLabel,
   type Quiz,
+  type RotationDirection,
   type ScoreType,
   type Team,
 } from '../../shared/types';
@@ -408,6 +412,7 @@ export function Dashboard({
   const [bounce, setBounce] = useState(false);
   const [startRound, setStartRound] = useState<'nextRound' | 'tieBreak' | null>(null);
   const [nextMaster, setNextMaster] = useState('');
+  const [nextDirection, setNextDirection] = useState<RotationDirection>('CLOCKWISE');
   const [confirm, setConfirm] = useState<'round' | 'end' | null>(null);
   const [details, setDetails] = useState<Team | null>(null);
   const [adjust, setAdjust] = useState<Team | null>(null);
@@ -471,7 +476,14 @@ export function Dashboard({
             className="form-stack"
             onSubmit={async (e) => {
               e.preventDefault();
-              if (await act({ type: startRound, master: nextMaster })) setStartRound(null);
+              if (
+                await act({
+                  type: startRound,
+                  master: nextMaster,
+                  direction: nextDirection,
+                })
+              )
+                setStartRound(null);
             }}
           >
             <Field label="Quiz master for the upcoming round">
@@ -482,6 +494,26 @@ export function Dashboard({
                 value={nextMaster}
                 onChange={(e) => setNextMaster(e.target.value)}
               />
+            </Field>
+            <Field label="Rotation direction">
+              <div className="direction-toggle-group" role="group" aria-label="Upcoming round rotation direction">
+                <button
+                  type="button"
+                  className={`direction-btn ${nextDirection === 'CLOCKWISE' ? 'is-active' : ''}`}
+                  onClick={() => setNextDirection('CLOCKWISE')}
+                >
+                  <RotateCw size={13} />
+                  <span>Clockwise</span>
+                </button>
+                <button
+                  type="button"
+                  className={`direction-btn ${nextDirection === 'ANTICLOCKWISE' ? 'is-active' : ''}`}
+                  onClick={() => setNextDirection('ANTICLOCKWISE')}
+                >
+                  <RotateCcw size={13} />
+                  <span>Anticlockwise</span>
+                </button>
+              </div>
             </Field>
             <div className="modal-actions">
               <button
@@ -578,7 +610,9 @@ export function Dashboard({
                   if (quiz.state.roundIndex + 1 >= quiz.rounds.length)
                     void act({ type: 'nextRound' });
                   else {
+                    const nextR = quiz.rounds[quiz.state.roundIndex + 1];
                     setNextMaster(roundMaster(quiz, quiz.state.roundIndex + 1));
+                    setNextDirection(nextR ? roundDirection(quiz, nextR.id) : 'CLOCKWISE');
                     setStartRound('nextRound');
                   }
                 }}
@@ -596,7 +630,7 @@ export function Dashboard({
         <>
           <div className="mobile-current">
             <span>
-              R{quiz.state.roundIndex + 1} · Q{quiz.state.question}/{round.questions}
+              R{quiz.state.roundIndex + 1} · Q{quiz.state.question}/{round.questions} ({roundDirection(quiz, round?.id) === 'ANTICLOCKWISE' ? '↺' : '↻'})
             </span>
             <strong>Direct: Team {quiz.teams.find((t) => t.id === a.directTeamId)?.letter}</strong>
           </div>
@@ -622,6 +656,38 @@ export function Dashboard({
               </div>
               <div className="progress">
                 <span style={{ width: `${(quiz.state.question / round.questions) * 100}%` }} />
+              </div>
+              <div className="round-direction-bar">
+                <div className="direction-label-group">
+                  <span className="eyebrow">ROUND ROTATION</span>
+                  <span className="direction-hint">
+                    {roundDirection(quiz, round?.id) === 'ANTICLOCKWISE'
+                      ? 'Anticlockwise: turns & bounces move backward (previous team)'
+                      : 'Clockwise: turns & bounces move forward (next team)'}
+                  </span>
+                </div>
+                <div className="direction-toggle-group" role="group" aria-label="Round rotation direction">
+                  <button
+                    type="button"
+                    className={`direction-btn ${roundDirection(quiz, round?.id) === 'CLOCKWISE' ? 'is-active' : ''}`}
+                    disabled={busy}
+                    onClick={() => void act({ type: 'roundDirection', direction: 'CLOCKWISE' })}
+                    title="Rotate forward: A → B → C"
+                  >
+                    <RotateCw size={13} />
+                    <span>Clockwise</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`direction-btn ${roundDirection(quiz, round?.id) === 'ANTICLOCKWISE' ? 'is-active' : ''}`}
+                    disabled={busy}
+                    onClick={() => void act({ type: 'roundDirection', direction: 'ANTICLOCKWISE' })}
+                    title="Rotate backward: G → F → E"
+                  >
+                    <RotateCcw size={13} />
+                    <span>Anticlockwise</span>
+                  </button>
+                </div>
               </div>
               <div className="question-selects">
                 <Field label="Current direct team">

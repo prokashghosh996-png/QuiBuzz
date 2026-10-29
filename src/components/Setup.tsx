@@ -10,6 +10,8 @@ import {
   UserRound,
   Save,
   Play,
+  RotateCw,
+  RotateCcw,
 } from 'lucide-react';
 import { type Draft, type Quiz, teamLetter } from '../../shared/types';
 import { readySchema } from '../../shared/validation';
@@ -381,6 +383,40 @@ export function Setup({ quiz, act, busy }: { quiz: Quiz; act: Act; busy: boolean
                       }
                     />
                   </Field>
+                  <Field label="Rotation direction">
+                    <div className="direction-toggle-group" role="group" aria-label={`Round ${i + 1} rotation direction`}>
+                      <button
+                        type="button"
+                        className={`direction-btn ${r.direction !== 'ANTICLOCKWISE' ? 'is-active' : ''}`}
+                        onClick={() =>
+                          update({
+                            ...draft,
+                            rounds: draft.rounds.map((x, j) =>
+                              j === i ? { ...x, direction: 'CLOCKWISE' } : x,
+                            ),
+                          })
+                        }
+                      >
+                        <RotateCw size={13} />
+                        <span>Clockwise</span>
+                      </button>
+                      <button
+                        type="button"
+                        className={`direction-btn ${r.direction === 'ANTICLOCKWISE' ? 'is-active' : ''}`}
+                        onClick={() =>
+                          update({
+                            ...draft,
+                            rounds: draft.rounds.map((x, j) =>
+                              j === i ? { ...x, direction: 'ANTICLOCKWISE' } : x,
+                            ),
+                          })
+                        }
+                      >
+                        <RotateCcw size={13} />
+                        <span>Anticlockwise</span>
+                      </button>
+                    </div>
+                  </Field>
                 </div>
               ))}
             </div>
@@ -478,7 +514,10 @@ export function Setup({ quiz, act, busy }: { quiz: Quiz; act: Act; busy: boolean
                 <div className="review-line" key={i}>
                   <span>
                     {i + 1}. {r.name}
-                    <small>Quiz master: {r.master?.trim() || draft.master}</small>
+                    <small>
+                      Quiz master: {r.master?.trim() || draft.master} ·{' '}
+                      {r.direction === 'ANTICLOCKWISE' ? 'Anticlockwise (↺)' : 'Clockwise (↻)'}
+                    </small>
                   </span>
                   <span>{r.questions} questions</span>
                 </div>

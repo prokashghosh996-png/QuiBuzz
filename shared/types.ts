@@ -1,6 +1,7 @@
 export type Status = 'SETUP' | 'READY' | 'LIVE' | 'ROUND_COMPLETE' | 'QUIZ_COMPLETE';
 export type ScoreType =
   'DIRECT_CORRECT' | 'BONUS_CORRECT' | 'POUNCE_CORRECT' | 'POUNCE_WRONG' | 'MANUAL_ADJUSTMENT';
+export type RotationDirection = 'CLOCKWISE' | 'ANTICLOCKWISE';
 export interface Draft {
   name: string;
   master: string;
@@ -10,7 +11,12 @@ export interface Draft {
   step: number;
   bounceEnabled?: boolean;
   teams: { name: string; members: string[] }[];
-  rounds: { name: string; questions: number; master?: string }[];
+  rounds: {
+    name: string;
+    questions: number;
+    master?: string;
+    direction?: RotationDirection;
+  }[];
 }
 export interface QuestionState {
   directTeamId: string;
@@ -20,6 +26,7 @@ export interface QuestionState {
 export interface LiveState {
   bounceEnabled?: boolean;
   roundMasters?: Record<string, string>;
+  roundDirections?: Record<string, RotationDirection>;
   roundIndex: number;
   question: number;
   order: string[];
@@ -93,9 +100,9 @@ export const defaultDraft = (): Draft => ({
   bounceEnabled: false,
   teams: Array.from({ length: 4 }, () => ({ name: '', members: ['', ''] })),
   rounds: [
-    { name: 'General knowledge', questions: 12 },
-    { name: 'Technology', questions: 10 },
-    { name: 'Rapid fire', questions: 8 },
+    { name: 'General knowledge', questions: 12, direction: 'CLOCKWISE' },
+    { name: 'Technology', questions: 10, direction: 'CLOCKWISE' },
+    { name: 'Rapid fire', questions: 8, direction: 'CLOCKWISE' },
   ],
 });
 export const emptyState = (): LiveState => ({
@@ -133,8 +140,52 @@ export const currentAssignment = (q: Quiz) => q.state.assignments[questionKey(q.
 export const followingTeam = (order: string[], id: string) =>
   order[(order.indexOf(id) + 1) % order.length];
 
+export const previousTeam = (order: string[], id: string) =>
+  order[(order.indexOf(id) - 1 + order.length) % order.length];
+
+export const nextTeamInDirection = (
+  order: string[],
+  id: string,
+  direction: RotationDirection = 'CLOCKWISE',
+) => (direction === 'ANTICLOCKWISE' ? previousTeam(order, id) : followingTeam(order, id));
+
 export const roundMaster = (q: Quiz, index = q.state.roundIndex) =>
   q.state.roundMasters?.[q.rounds[index]?.id] || q.draft.rounds[index]?.master?.trim() || q.master;
+
+export const roundDirection = (q: Quiz, roundId?: string): RotationDirection => {
+  const currentRoundId = roundId || q.rounds[q.state.roundIndex]?.id;
+  if (currentRoundId && q.state.roundDirections?.[currentRoundId]) {
+    return q.state.roundDirections[currentRoundId];
+  }
+  const roundIdx = roundId ? q.rounds.findIndex((r) => r.id === roundId) : q.state.roundIndex;
+  return q.draft.rounds[roundIdx]?.direction || 'CLOCKWISE';
+};
+
+export function getNonBounceNextTeam(
+  order: string[],
+  question: number,
+  direction: RotationDirection = 'CLOCKWISE',
+): string {
+  if (!order.length) return '';
+  if (direction === 'ANTICLOCKWISE') {
+    const idx = ((-question % order.length) + order.length) % order.length;
+    return order[idx];
+  }
+  return order[question % order.length];
+}
+
+export function getNonBounceDirectTeam(
+  order: string[],
+  question: number,
+  direction: RotationDirection = 'CLOCKWISE',
+): string {
+  if (!order.length) return '';
+  if (direction === 'ANTICLOCKWISE') {
+    const idx = ((-(question - 1) % order.length) + order.length) % order.length;
+    return order[idx];
+  }
+  return order[(question - 1) % order.length];
+}
 
 // Manual corrections do not count as another scoring attempt.
 export function hasQuestionScore(
@@ -166,10 +217,11 @@ export function resolveBounceNextTeamId(
   >,
   roundId?: string,
   question?: number,
+  direction: RotationDirection = 'CLOCKWISE',
 ): string {
   if (!order.length) return directTeamId;
   const directIndex = order.indexOf(directTeamId);
-  if (directIndex === -1) return followingTeam(order, directTeamId);
+  if (directIndex === -1) return nextTeamInDirection(order, directTeamId, direction);
 
   const relevantEvents = events.filter(
     (e) =>
@@ -186,13 +238,17 @@ export function resolveBounceNextTeamId(
   for (const event of relevantEvents) {
     const teamIndex = order.indexOf(event.teamId);
     if (teamIndex === -1) continue;
-    const distance = (teamIndex - directIndex + order.length) % order.length;
+    const distance =
+      direction === 'ANTICLOCKWISE'
+        ? (directIndex - teamIndex + order.length) % order.length
+        : (teamIndex - directIndex + order.length) % order.length;
     if (distance > maxDistance) {
       maxDistance = distance;
       latestTeamId = event.teamId;
     }
   }
 
-  return followingTeam(order, latestTeamId);
+  return nextTeamInDirection(order, latestTeamId, direction);
 }
+
 

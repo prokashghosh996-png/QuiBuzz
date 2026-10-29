@@ -23,6 +23,7 @@ export const draftSchema = z.object({
         name: z.string().max(100),
         questions: count(1),
         master: z.string().trim().max(100).optional(),
+        direction: z.enum(['CLOCKWISE', 'ANTICLOCKWISE']).optional(),
       }),
     )
     .min(1)
@@ -90,11 +91,24 @@ export const actionSchema = z.discriminatedUnion('type', [
     roundId: id,
     master: z.string().trim().min(1).max(100),
   }),
+  z.object({
+    type: z.literal('roundDirection'),
+    roundId: id.optional(),
+    direction: z.enum(['CLOCKWISE', 'ANTICLOCKWISE']),
+  }),
   z.object({ type: z.literal('completeRound') }),
-  z.object({ type: z.literal('nextRound'), master: z.string().trim().min(1).max(100).optional() }),
+  z.object({
+    type: z.literal('nextRound'),
+    master: z.string().trim().min(1).max(100).optional(),
+    direction: z.enum(['CLOCKWISE', 'ANTICLOCKWISE']).optional(),
+  }),
   z.object({ type: z.literal('endQuiz') }),
   z.object({ type: z.literal('resume') }),
-  z.object({ type: z.literal('tieBreak'), master: z.string().trim().min(1).max(100).optional() }),
+  z.object({
+    type: z.literal('tieBreak'),
+    master: z.string().trim().min(1).max(100).optional(),
+    direction: z.enum(['CLOCKWISE', 'ANTICLOCKWISE']).optional(),
+  }),
   z.object({ type: z.literal('reset'), restart: z.boolean(), confirmed: z.literal(true) }),
 ]);
 export type Action = z.infer<typeof actionSchema>;
