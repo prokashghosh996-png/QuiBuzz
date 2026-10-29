@@ -154,3 +154,45 @@ export function hasQuestionScore(
       event.type !== 'MANUAL_ADJUSTMENT',
   );
 }
+
+export function resolveBounceNextTeamId(
+  order: string[],
+  directTeamId: string,
+  events: ReadonlyArray<
+    Pick<ScoreEvent, 'teamId' | 'roundId' | 'question' | 'type'> & {
+      voidedAt: unknown;
+      marks?: number;
+    }
+  >,
+  roundId?: string,
+  question?: number,
+): string {
+  if (!order.length) return directTeamId;
+  const directIndex = order.indexOf(directTeamId);
+  if (directIndex === -1) return followingTeam(order, directTeamId);
+
+  const relevantEvents = events.filter(
+    (e) =>
+      !e.voidedAt &&
+      (roundId === undefined || e.roundId === roundId) &&
+      (question === undefined || e.question === question) &&
+      (e.type === 'DIRECT_CORRECT' || e.type === 'BONUS_CORRECT') &&
+      (e.marks === undefined || e.marks > 0),
+  );
+
+  let maxDistance = 0;
+  let latestTeamId = directTeamId;
+
+  for (const event of relevantEvents) {
+    const teamIndex = order.indexOf(event.teamId);
+    if (teamIndex === -1) continue;
+    const distance = (teamIndex - directIndex + order.length) % order.length;
+    if (distance > maxDistance) {
+      maxDistance = distance;
+      latestTeamId = event.teamId;
+    }
+  }
+
+  return followingTeam(order, latestTeamId);
+}
+

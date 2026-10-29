@@ -7,6 +7,7 @@ import {
   followingTeam,
   hasQuestionScore,
   questionKey,
+  resolveBounceNextTeamId,
   teamLetter,
   type Draft,
   type LiveState,
@@ -253,7 +254,22 @@ export async function command(quizId: string, body: unknown, ownerId?: string) {
             s.bounceEnabled !== false &&
             (action.scoreType === 'DIRECT_CORRECT' || action.scoreType === 'BONUS_CORRECT')
           )
-            assignment().nextTeamId = followingTeam(s.order, action.teamId);
+            assignment().nextTeamId = resolveBounceNextTeamId(
+              s.order,
+              assignment().directTeamId,
+              [
+                ...q.events,
+                {
+                  teamId: action.teamId,
+                  roundId: round.id,
+                  question: s.question,
+                  type: action.scoreType,
+                  voidedAt: null,
+                },
+              ],
+              round.id,
+              s.question,
+            );
           break;
         }
         case 'undo': {
@@ -264,6 +280,18 @@ export async function command(quizId: string, body: unknown, ownerId?: string) {
             where: { id: event.id },
             data: { voidedAt: new Date(), voidReason: 'Undo last score' },
           });
+          if (s.bounceEnabled !== false) {
+            const updatedEvents = q.events.map((e) =>
+              e.id === event.id ? { ...e, voidedAt: new Date() } : e,
+            );
+            assignment().nextTeamId = resolveBounceNextTeamId(
+              s.order,
+              assignment().directTeamId,
+              updatedEvents,
+              round.id,
+              s.question,
+            );
+          }
           break;
         }
         case 'void':
@@ -274,7 +302,10 @@ export async function command(quizId: string, body: unknown, ownerId?: string) {
             where: { id: event.id },
             data: { voidedAt: new Date(), voidReason: action.reason },
           });
-          if (action.type === 'editEvent')
+          const updatedEvents = q.events.map((e) =>
+            e.id === event.id ? { ...e, voidedAt: new Date() } : e,
+          );
+          if (action.type === 'editEvent') {
             await tx.scoreEvent.create({
               data: {
                 quizId,
@@ -287,6 +318,23 @@ export async function command(quizId: string, body: unknown, ownerId?: string) {
                 replacesId: event.id,
               },
             });
+            updatedEvents.push({
+              ...event,
+              id: 'edit-replacement',
+              marks: action.marks,
+              reason: action.reason,
+              voidedAt: null,
+            });
+          }
+          if (s.bounceEnabled !== false) {
+            assignment().nextTeamId = resolveBounceNextTeamId(
+              s.order,
+              assignment().directTeamId,
+              updatedEvents,
+              round.id,
+              s.question,
+            );
+          }
           break;
         }
         case 'navigate': {
@@ -305,17 +353,14 @@ export async function command(quizId: string, body: unknown, ownerId?: string) {
         case 'bounceMode': {
           started();
           s.bounceEnabled = action.enabled;
-          const winner = q.events
-            .filter(
-              (e) =>
-                !e.voidedAt &&
-                e.roundId === round.id &&
-                e.question === s.question &&
-                (e.type === 'DIRECT_CORRECT' || e.type === 'BONUS_CORRECT'),
-            )
-            .at(-1);
           assignment().nextTeamId = action.enabled
-            ? followingTeam(s.order, winner?.teamId ?? assignment().directTeamId)
+            ? resolveBounceNextTeamId(
+                s.order,
+                assignment().directTeamId,
+                q.events,
+                round.id,
+                s.question,
+              )
             : s.order[s.question % s.order.length];
           break;
         }
@@ -326,7 +371,13 @@ export async function command(quizId: string, body: unknown, ownerId?: string) {
             fail('Enable bounce rotation to override the next direct team.');
           assignment()[action.target] = action.teamId;
           if (action.target === 'directTeamId' && s.bounceEnabled !== false)
-            assignment().nextTeamId = followingTeam(s.order, action.teamId);
+            assignment().nextTeamId = resolveBounceNextTeamId(
+              s.order,
+              action.teamId,
+              q.events,
+              round.id,
+              s.question,
+            );
           break;
         case 'order': {
           started();
@@ -340,7 +391,13 @@ export async function command(quizId: string, body: unknown, ownerId?: string) {
           assignment().nextTeamId =
             s.bounceEnabled === false
               ? s.order[s.question % s.order.length]
-              : followingTeam(s.order, assignment().directTeamId);
+              : resolveBounceNextTeamId(
+                  s.order,
+                  assignment().directTeamId,
+                  q.events,
+                  round.id,
+                  s.question,
+                );
           break;
         }
         case 'timer': {

@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { db } from '../server/db.js';
 import { command, createQuiz, getQuiz } from '../server/service.js';
-import { defaultDraft, total, standings, type Quiz } from '../shared/types.js';
+import { defaultDraft, total, standings, teamLetter, type Quiz } from '../shared/types.js';
 import { readySchema } from '../shared/validation.js';
 
 test('setup validation catches missing members, quiz master and invalid scoring', () => {
@@ -196,6 +196,66 @@ test('PostgreSQL scoring, bounce, pounces, retries, concurrency, history and ref
     await act({ type: 'assign', target: 'nextTeamId', teamId: q.teams[1].id });
     await act({ type: 'navigate', delta: 1 });
     assert.equal((q as unknown as Quiz).state.assignments['0:2'].directTeamId, q.teams[1].id);
+  } finally {
+    await db.quiz.delete({ where: { id: q.id } });
+    await db.$disconnect();
+  }
+});
+
+test('PostgreSQL bounce rotation for part bonus and part direct is independent of instruction sequence', async () => {
+  const d = defaultDraft();
+  d.name = 'Bounce rotation sequence test';
+  d.bounceEnabled = true;
+  d.master = 'Test host';
+  d.teams = Array.from({ length: 6 }, (_, i) => ({ name: `Team ${teamLetter(i)}`, members: [`Member ${i + 1}`] }));
+  d.rounds = [
+    { name: 'Round 1', questions: 5 },
+  ];
+  let q = await createQuiz(d);
+  const act = async (action: unknown) => {
+    q = await command(q.id, { requestId: crypto.randomUUID(), version: q.version, action });
+  };
+  try {
+    await act({ type: 'ready', draft: d });
+    await act({ type: 'start' });
+
+    // Question 1: direct is Team A (teams[0]).
+    // Case 1: Award Team E (+5) first, then Team B (+5) later.
+    // Next question must go to Team F (teams[5]) according to Bounce rule.
+    await act({ type: 'score', teamId: q.teams[4].id, scoreType: 'BONUS_CORRECT', marks: 5 });
+    assert.equal((q as unknown as Quiz).state.assignments['0:1'].nextTeamId, q.teams[5].id);
+    await act({ type: 'score', teamId: q.teams[1].id, scoreType: 'BONUS_CORRECT', marks: 5 });
+    assert.equal((q as unknown as Quiz).state.assignments['0:1'].nextTeamId, q.teams[5].id);
+
+    // Navigating to next question uses nextTeamId (Team F)
+    await act({ type: 'navigate', delta: 1 });
+    assert.equal((q as unknown as Quiz).state.question, 2);
+    assert.equal((q as unknown as Quiz).state.assignments['0:2'].directTeamId, q.teams[5].id);
+
+    // Question 2: direct is Team F (teams[5]).
+    // Rotation order starting from F: F (0), A (1), B (2), C (3), D (4), E (5).
+    // Award Team B (+5) then Team D (+5). Team D is later in rotation (dist 4 vs 2).
+    // Awarding B first, then D later -> nextTeamId should follow Team D to Team E (teams[4]).
+    await act({ type: 'score', teamId: q.teams[1].id, scoreType: 'BONUS_CORRECT', marks: 5 });
+    assert.equal((q as unknown as Quiz).state.assignments['0:2'].nextTeamId, q.teams[2].id);
+    await act({ type: 'score', teamId: q.teams[3].id, scoreType: 'BONUS_CORRECT', marks: 5 });
+    assert.equal((q as unknown as Quiz).state.assignments['0:2'].nextTeamId, q.teams[4].id);
+
+    // Navigate to question 3
+    await act({ type: 'navigate', delta: 1 });
+    assert.equal((q as unknown as Quiz).state.question, 3);
+    assert.equal((q as unknown as Quiz).state.assignments['0:3'].directTeamId, q.teams[4].id);
+
+    // Question 3: direct is Team E (teams[4]).
+    // Part Direct to Team E (+5), Part Bonus to Team B (+5).
+    // Rotation from E: E (0), F (1), A (2), B (3).
+    // Award Team B first, then Team E later.
+    // Even though E was scored later, B is later in bounce rotation than direct team E!
+    // Next team must be Team C (following B).
+    await act({ type: 'score', teamId: q.teams[1].id, scoreType: 'BONUS_CORRECT', marks: 5 });
+    assert.equal((q as unknown as Quiz).state.assignments['0:3'].nextTeamId, q.teams[2].id);
+    await act({ type: 'score', teamId: q.teams[4].id, scoreType: 'DIRECT_CORRECT', marks: 5 });
+    assert.equal((q as unknown as Quiz).state.assignments['0:3'].nextTeamId, q.teams[2].id);
   } finally {
     await db.quiz.delete({ where: { id: q.id } });
     await db.$disconnect();
