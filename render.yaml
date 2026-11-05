@@ -23,7 +23,7 @@ services:
 
 databases:
   - name: quibuzz-db
-    plan: 0.1c-256mb
+    plan: free
     region: singapore
     databaseName: quibuzz
     user: quibuzz
