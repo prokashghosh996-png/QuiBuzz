@@ -15,9 +15,7 @@ services:
       - key: HOST
         value: 0.0.0.0
       - key: DATABASE_URL
-        fromDatabase:
-          name: quibuzz-db
-          property: connectionString
+        sync: false
       - key: NODE_ENV
         value: production
       - key: COOKIE_SECURE
