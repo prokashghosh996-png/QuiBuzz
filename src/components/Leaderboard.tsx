@@ -1,5 +1,12 @@
+import { useEffect, useRef, useState } from 'react';
 import { Trophy, ArrowUpRight, Download } from 'lucide-react';
 import { standings, total, type Quiz } from '../../shared/types';
+
+interface ScoreChange {
+  delta: number;
+  timestamp: number;
+}
+
 export function Leaderboard({
   quiz,
   compact = false,
@@ -9,6 +16,47 @@ export function Leaderboard({
   compact?: boolean;
   showPlayers?: boolean;
 }) {
+  const prevScoresRef = useRef<Record<string, number>>({});
+  const [changes, setChanges] = useState<Record<string, ScoreChange>>({});
+
+  useEffect(() => {
+    const currentScores: Record<string, number> = {};
+    const newChanges: Record<string, ScoreChange> = {};
+    const now = Date.now();
+
+    for (const team of quiz.teams) {
+      const currentScore = total(quiz, team.id);
+      currentScores[team.id] = currentScore;
+
+      const prevScore = prevScoresRef.current[team.id];
+      // Only trigger animation if we had a recorded previous score and it changed
+      if (prevScore !== undefined && currentScore !== prevScore) {
+        newChanges[team.id] = {
+          delta: currentScore - prevScore,
+          timestamp: now,
+        };
+      }
+    }
+
+    prevScoresRef.current = currentScores;
+
+    if (Object.keys(newChanges).length > 0) {
+      setChanges((prev) => ({ ...prev, ...newChanges }));
+      const timer = setTimeout(() => {
+        setChanges((prev) => {
+          const next = { ...prev };
+          for (const id of Object.keys(newChanges)) {
+            if (next[id]?.timestamp === now) {
+              delete next[id];
+            }
+          }
+          return next;
+        });
+      }, 2500);
+      return () => clearTimeout(timer);
+    }
+  }, [quiz]);
+
   return (
     <section className={`panel leaderboard ${compact ? 'compact' : ''}`}>
       <div className="section-heading">
@@ -19,27 +67,58 @@ export function Leaderboard({
         <span className="badge neutral">TOTAL</span>
       </div>
       <div className="leader-list">
-        {standings(quiz).map(({ team, score, rank, tied }) => (
-          <div className={`leader-row ${rank === 1 ? 'first' : ''}`} key={team.id}>
-            <span className="rank">
-              {rank === 1 ? <Trophy size={17} /> : String(rank).padStart(2, '0')}
-            </span>
-            <span className={`avatar color-${team.initialOrder % 6}`}>{team.letter}</span>
-            <div className="leader-name">
-              <strong>{team.name || `Team ${team.letter}`}</strong>
-              {showPlayers && team.members.length > 0 && (
-                <small className="leader-players">{team.members.join(' - ')}</small>
-              )}
-              <small>
-                Team {team.letter}
-                {tied ? ' · Tied' : ''}
-              </small>
+        {standings(quiz).map(({ team, score, rank, tied }) => {
+          const change = changes[team.id];
+          const isPositive = change && change.delta > 0;
+          const isNegative = change && change.delta < 0;
+
+          const rowFlashClass = isPositive
+            ? 'score-flash-positive'
+            : isNegative
+              ? 'score-flash-negative'
+              : '';
+
+          const pulseClass = isPositive
+            ? 'score-pulse-positive'
+            : isNegative
+              ? 'score-pulse-negative'
+              : '';
+
+          return (
+            <div
+              className={`leader-row ${rank === 1 ? 'first' : ''} ${rowFlashClass}`}
+              key={team.id}
+            >
+              <span className="rank">
+                {rank === 1 ? <Trophy size={17} /> : String(rank).padStart(2, '0')}
+              </span>
+              <span className={`avatar color-${team.initialOrder % 6}`}>{team.letter}</span>
+              <div className="leader-name">
+                <strong>{team.name || `Team ${team.letter}`}</strong>
+                {showPlayers && team.members.length > 0 && (
+                  <small className="leader-players">{team.members.join(' - ')}</small>
+                )}
+                <small>
+                  Team {team.letter}
+                  {tied ? ' · Tied' : ''}
+                </small>
+              </div>
+              <div className="leader-score-wrapper">
+                {change && (
+                  <span
+                    key={`${team.id}-${change.timestamp}`}
+                    className={`projector-score-badge ${isPositive ? 'positive' : 'negative'}`}
+                  >
+                    {isPositive ? `+${change.delta}` : change.delta}
+                  </span>
+                )}
+                <b className={`leader-score ${pulseClass}`} key={score}>
+                  {score}
+                </b>
+              </div>
             </div>
-            <b className="leader-score" key={score}>
-              {score}
-            </b>
-          </div>
-        ))}
+          );
+        })}
       </div>
       <div className="leader-foot">
         <span className="status-dot" /> Updates live with every score <ArrowUpRight size={14} />
@@ -47,11 +126,13 @@ export function Leaderboard({
     </section>
   );
 }
+
 function csvCell(value: unknown) {
   let s = String(value);
   if (/^[=+@\-\t\r]/.test(s)) s = `'${s}`;
   return `"${s.replaceAll('"', '""')}"`;
 }
+
 export function exportResults(q: Quiz) {
   const rows: unknown[][] = [
     ['Quiz', q.name],
@@ -81,6 +162,7 @@ export function exportResults(q: Quiz) {
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
+
 export function ResultsTable({ quiz }: { quiz: Quiz }) {
   return (
     <div className="table-scroll">
@@ -121,6 +203,7 @@ export function ResultsTable({ quiz }: { quiz: Quiz }) {
     </div>
   );
 }
+
 export function ExportButton({ quiz }: { quiz: Quiz }) {
   return (
     <button className="btn" onClick={() => exportResults(quiz)}>
