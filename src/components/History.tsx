@@ -194,7 +194,7 @@ export function History({
     all.sort(
       (a, b) =>
         (quiz.rounds.find((r) => r.id === a.roundId)?.order ?? 0) -
-          (quiz.rounds.find((r) => r.id === b.roundId)?.order ?? 0) || a.question - b.question,
+        (quiz.rounds.find((r) => r.id === b.roundId)?.order ?? 0) || a.question - b.question,
     );
   const events = compact ? all.slice(0, 5) : all;
   return (
@@ -305,10 +305,15 @@ export function History({
               <div className="activity-main">
                 <strong>{t.name || `Team ${t.letter}`}</strong>
                 <span>
-                  {scoreLabels[e.type]} · R{r.order + 1}, Q{e.question}
+                  {['Part Pounce', 'Part Direct', 'Part Bonus'].includes(e.reason)
+                    ? e.reason
+                    : scoreLabels[e.type]} · R{r.order + 1}, Q{e.question}
                   {e.replacesId ? ' · Corrected' : ''}
                 </span>
-                {e.reason && <small>{e.reason}</small>}
+                {e.reason &&
+                  !['Part Pounce', 'Part Direct', 'Part Bonus'].includes(e.reason) && (
+                    <small>{e.reason}</small>
+                  )}
                 {e.voidedAt && <small className="red">Removed: {e.voidReason}</small>}
                 <time dateTime={e.createdAt}>
                   {new Date(e.createdAt).toLocaleTimeString([], {

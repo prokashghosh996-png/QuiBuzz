@@ -1,6 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
-import { Trophy, ArrowUpRight, Download } from 'lucide-react';
-import { standings, total, type Quiz } from '../../shared/types';
+import { Trophy, ArrowUpRight, Download, History as HistoryIcon } from 'lucide-react';
+import {
+  standings,
+  total,
+  points,
+  scoreLabels,
+  type Quiz,
+  type Team,
+} from '../../shared/types';
+import { Modal } from './ui';
 
 interface ScoreChange {
   delta: number;
@@ -11,13 +19,16 @@ export function Leaderboard({
   quiz,
   compact = false,
   showPlayers = false,
+  interactive = true,
 }: {
   quiz: Quiz;
   compact?: boolean;
   showPlayers?: boolean;
+  interactive?: boolean;
 }) {
   const prevScoresRef = useRef<Record<string, number>>({});
   const [changes, setChanges] = useState<Record<string, ScoreChange>>({});
+  const [selectedTeam, setSelectedTeam] = useState<Team | null>(null);
 
   useEffect(() => {
     const currentScores: Record<string, number> = {};
@@ -86,8 +97,27 @@ export function Leaderboard({
 
           return (
             <div
-              className={`leader-row ${rank === 1 ? 'first' : ''} ${rowFlashClass}`}
+              className={`leader-row ${rank === 1 ? 'first' : ''} ${interactive ? 'clickable' : ''
+                } ${rowFlashClass}`}
               key={team.id}
+              role={interactive ? 'button' : undefined}
+              tabIndex={interactive ? 0 : undefined}
+              aria-label={
+                interactive
+                  ? `View score history for ${team.name || `Team ${team.letter}`}`
+                  : undefined
+              }
+              onClick={interactive ? () => setSelectedTeam(team) : undefined}
+              onKeyDown={
+                interactive
+                  ? (e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      setSelectedTeam(team);
+                    }
+                  }
+                  : undefined
+              }
             >
               <span className="rank">
                 {rank === 1 ? <Trophy size={17} /> : String(rank).padStart(2, '0')}
@@ -96,7 +126,7 @@ export function Leaderboard({
               <div className="leader-name">
                 <strong>{team.name || `Team ${team.letter}`}</strong>
                 {showPlayers && team.members.length > 0 && (
-                  <small className="leader-players">{team.members.join(' - ')}</small>
+                  <small className="leader-players">{team.members.join(' · ')}</small>
                 )}
                 <small>
                   Team {team.letter}
@@ -121,8 +151,141 @@ export function Leaderboard({
         })}
       </div>
       <div className="leader-foot">
-        <span className="status-dot" /> Updates live with every score <ArrowUpRight size={14} />
+        <span>
+          <span className="status-dot" /> Updates live with every score
+        </span>
+        {interactive && (
+          <span className="leader-tap-hint">
+            <HistoryIcon size={12} /> Tap team for history
+          </span>
+        )}
+        <ArrowUpRight size={14} />
       </div>
+
+      {selectedTeam && (
+        <Modal
+          title={`Team ${selectedTeam.letter} Score History`}
+          onClose={() => setSelectedTeam(null)}
+        >
+          <div className="team-history-dialog">
+            <div className="team-history-header">
+              <div className="team-history-identity">
+                <span className={`avatar color-${selectedTeam.initialOrder % 6}`}>
+                  {selectedTeam.letter}
+                </span>
+                <div>
+                  <h3>{selectedTeam.name || `Team ${selectedTeam.letter}`}</h3>
+                  {selectedTeam.members.length > 0 && (
+                    <p className="team-members-list">{selectedTeam.members.join(' · ')}</p>
+                  )}
+                </div>
+              </div>
+              <div className="team-history-score-box">
+                <span className="score-box-label">CURRENT SCORE</span>
+                <strong className="score-box-value">{total(quiz, selectedTeam.id)}</strong>
+              </div>
+            </div>
+
+            {quiz.rounds.length > 1 && (
+              <div className="team-round-breakdown">
+                {quiz.rounds.map((round, idx) => {
+                  const roundScore = total(quiz, selectedTeam.id, round.id);
+                  return (
+                    <div key={round.id} className="team-round-pill">
+                      <span className="round-pill-name">R{idx + 1}: {round.name}</span>
+                      <b
+                        className={`round-pill-score ${roundScore > 0 ? 'green' : roundScore < 0 ? 'red' : ''
+                          }`}
+                      >
+                        {points(roundScore)}
+                      </b>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            <div className="team-history-section">
+              <span className="eyebrow">QUESTION-BY-QUESTION BREAKDOWN</span>
+              {(() => {
+                const events = quiz.events
+                  .filter((e) => !e.voidedAt && e.teamId === selectedTeam.id)
+                  .slice()
+                  .reverse();
+
+                if (events.length === 0) {
+                  return (
+                    <div className="team-history-empty">
+                      <HistoryIcon size={24} />
+                      <p>No score history yet for this team.</p>
+                      <small className="muted">Points scored or deducted will appear here.</small>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="team-history-list">
+                    {events.map((e) => {
+                      const roundIdx = quiz.rounds.findIndex((r) => r.id === e.roundId);
+                      const roundName =
+                        roundIdx >= 0
+                          ? quiz.rounds[roundIdx]?.name || `Round ${roundIdx + 1}`
+                          : 'Round';
+                      const isPositive = e.marks > 0;
+                      const isNegative = e.marks < 0;
+
+                      return (
+                        <div
+                          key={e.id}
+                          className={`team-history-item ${isPositive ? 'positive' : isNegative ? 'negative' : ''
+                            }`}
+                        >
+                          <div className="item-meta">
+                            <span className="item-q-badge">Q{e.question}</span>
+                            <div className="item-details">
+                              <strong>
+                                Question {e.question}
+                                {quiz.rounds.length > 1 && (
+                                  <span className="round-tag"> · {roundName}</span>
+                                )}
+                              </strong>
+                              <div className="item-type-desc">
+                                <span className="badge-type">
+                                  {e.reason ||
+                                    (e.type === 'POUNCE_CORRECT' && e.marks < quiz.positive
+                                      ? 'Part Pounce'
+                                      : scoreLabels[e.type])}
+                                </span>
+                                <span className="item-sentence">
+                                  {isPositive
+                                    ? `+${e.marks} added on Question ${e.question}`
+                                    : isNegative
+                                      ? `${e.marks} deducted on Question ${e.question}`
+                                      : `0 points recorded`}
+                                </span>
+                                {e.reason &&
+                                  !['Part Direct', 'Part Bonus', 'Part Pounce'].includes(
+                                    e.reason,
+                                  ) && <span className="item-reason">({e.reason})</span>}
+                              </div>
+                            </div>
+                          </div>
+                          <div
+                            className={`item-points ${isPositive ? 'green' : isNegative ? 'red' : ''
+                              }`}
+                          >
+                            {points(e.marks)}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+        </Modal>
+      )}
     </section>
   );
 }

@@ -303,3 +303,36 @@ test('anticlockwise bounce rotation moves to previous team of furthest scorer', 
   );
   assert.equal(nextUnanswered, 'team-F');
 });
+
+
+test('part pounce action validation accepts marks: 5 and reason: Part Pounce', () => {
+  const partPounceAction = {
+    type: 'score',
+    teamId: 'team-2',
+    scoreType: 'POUNCE_CORRECT',
+    marks: 5,
+    reason: 'Part Pounce',
+  };
+  const result = actionSchema.safeParse(partPounceAction);
+  assert.equal(result.success, true);
+});
+
+test('part pounce deactivates further scoring for that team on the same question', () => {
+  const events: ScoreEvent[] = [
+    {
+      id: 'event-pounce-1',
+      teamId: 'team-2',
+      roundId: 'round-1',
+      question: 1,
+      type: 'POUNCE_CORRECT',
+      marks: 5,
+      reason: 'Part Pounce',
+      createdAt: new Date().toISOString(),
+      voidedAt: null,
+      voidReason: null,
+      replacesId: null,
+    },
+  ];
+  assert.equal(hasQuestionScore(events, 'team-2', 'round-1', 1), true);
+  assert.equal(hasQuestionScore(events, 'team-3', 'round-1', 1), false);
+});

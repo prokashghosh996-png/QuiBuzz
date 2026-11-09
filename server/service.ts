@@ -264,307 +264,309 @@ export async function command(quizId: string, body: unknown, ownerId?: string) {
                 action.type === 'adjust'
                   ? action.reason
                   : action.reason ||
-                    (action.marks !== undefined
-                      ? action.scoreType === 'DIRECT_CORRECT'
-                        ? 'Part Direct'
-                        : 'Part Bonus'
+                  (action.marks !== undefined
+                    ? action.scoreType === 'DIRECT_CORRECT'
+                      ? 'Part Direct'
+                    : action.scoreType === 'POUNCE_CORRECT'
+                      ? 'Part Pounce'
+                      : 'Part Bonus'
                       : ''),
             },
-          });
-          if (
-            action.type === 'score' &&
-            s.bounceEnabled !== false &&
-            (action.scoreType === 'DIRECT_CORRECT' || action.scoreType === 'BONUS_CORRECT')
-          )
-            assignment().nextTeamId = resolveBounceNextTeamId(
-              s.order,
-              assignment().directTeamId,
-              [
-                ...q.events,
-                {
-                  teamId: action.teamId,
-                  roundId: round.id,
-                  question: s.question,
-                  type: action.scoreType,
-                  voidedAt: null,
-                },
-              ],
-              round.id,
-              s.question,
-              currentDirection(),
-            );
-          break;
-        }
+      });
+  if (
+    action.type === 'score' &&
+    s.bounceEnabled !== false &&
+    (action.scoreType === 'DIRECT_CORRECT' || action.scoreType === 'BONUS_CORRECT')
+  )
+    assignment().nextTeamId = resolveBounceNextTeamId(
+      s.order,
+      assignment().directTeamId,
+      [
+        ...q.events,
+        {
+          teamId: action.teamId,
+          roundId: round.id,
+          question: s.question,
+          type: action.scoreType,
+          voidedAt: null,
+        },
+      ],
+      round.id,
+      s.question,
+      currentDirection(),
+    );
+  break;
+}
         case 'undo': {
-          started();
-          const event =
-            q.events.filter((e) => !e.voidedAt).at(-1) ?? fail('There are no scores to undo.');
-          await tx.scoreEvent.update({
-            where: { id: event.id },
-            data: { voidedAt: new Date(), voidReason: 'Undo last score' },
-          });
-          if (s.bounceEnabled !== false) {
-            const updatedEvents = q.events.map((e) =>
-              e.id === event.id ? { ...e, voidedAt: new Date() } : e,
-            );
-            assignment().nextTeamId = resolveBounceNextTeamId(
-              s.order,
-              assignment().directTeamId,
-              updatedEvents,
-              round.id,
-              s.question,
-              currentDirection(),
-            );
-          }
-          break;
-        }
+  started();
+  const event =
+    q.events.filter((e) => !e.voidedAt).at(-1) ?? fail('There are no scores to undo.');
+  await tx.scoreEvent.update({
+    where: { id: event.id },
+    data: { voidedAt: new Date(), voidReason: 'Undo last score' },
+  });
+  if (s.bounceEnabled !== false) {
+    const updatedEvents = q.events.map((e) =>
+      e.id === event.id ? { ...e, voidedAt: new Date() } : e,
+    );
+    assignment().nextTeamId = resolveBounceNextTeamId(
+      s.order,
+      assignment().directTeamId,
+      updatedEvents,
+      round.id,
+      s.question,
+      currentDirection(),
+    );
+  }
+  break;
+}
         case 'void':
         case 'editEvent': {
-          started();
-          const event = activeEvent(action.eventId);
-          await tx.scoreEvent.update({
-            where: { id: event.id },
-            data: { voidedAt: new Date(), voidReason: action.reason },
-          });
-          const updatedEvents = q.events.map((e) =>
-            e.id === event.id ? { ...e, voidedAt: new Date() } : e,
-          );
-          if (action.type === 'editEvent') {
-            await tx.scoreEvent.create({
-              data: {
-                quizId,
-                teamId: event.teamId,
-                roundId: event.roundId,
-                question: event.question,
-                type: event.type,
-                marks: action.marks,
-                reason: action.reason,
-                replacesId: event.id,
-              },
-            });
-            updatedEvents.push({
-              ...event,
-              id: 'edit-replacement',
-              marks: action.marks,
-              reason: action.reason,
-              voidedAt: null,
-            });
-          }
-          if (s.bounceEnabled !== false) {
-            assignment().nextTeamId = resolveBounceNextTeamId(
-              s.order,
-              assignment().directTeamId,
-              updatedEvents,
-              round.id,
-              s.question,
-              currentDirection(),
-            );
-          }
-          break;
-        }
-        case 'navigate': {
-          live();
-          const next = s.question + action.delta;
-          if (next < 1 || next > round.questions) fail('Question is outside the current round.');
-          const dir = currentDirection();
-          const direct =
-            s.bounceEnabled === false
-              ? getNonBounceDirectTeam(s.order, next, dir)
-              : assignment().nextTeamId;
-          s.question = next;
-          initQuestion(direct);
-          resetTimer();
-          break;
-        }
-        case 'bounceMode': {
-          started();
-          s.bounceEnabled = action.enabled;
-          const dir = currentDirection();
-          assignment().nextTeamId = action.enabled
-            ? resolveBounceNextTeamId(
-                s.order,
-                assignment().directTeamId,
-                q.events,
-                round.id,
-                s.question,
-                dir,
-              )
-            : getNonBounceNextTeam(s.order, s.question, dir);
-          break;
-        }
-        case 'assign':
-          live();
-          team(action.teamId);
-          if (action.target === 'nextTeamId' && s.bounceEnabled === false)
-            fail('Enable bounce rotation to override the next direct team.');
-          assignment()[action.target] = action.teamId;
-          if (action.target === 'directTeamId' && s.bounceEnabled !== false)
-            assignment().nextTeamId = resolveBounceNextTeamId(
-              s.order,
-              action.teamId,
-              q.events,
-              round.id,
-              s.question,
-              currentDirection(),
-            );
-          break;
-        case 'order': {
-          started();
-          if (
-            new Set(action.order).size !== q.teams.length ||
-            action.order.length !== q.teams.length ||
-            action.order.some((id) => !q.teams.some((t) => t.id === id))
-          )
-            fail('Team order must include each team exactly once.');
-          s.order = action.order;
-          const dir = currentDirection();
-          assignment().nextTeamId =
-            s.bounceEnabled === false
-              ? getNonBounceNextTeam(s.order, s.question, dir)
-              : resolveBounceNextTeamId(
-                  s.order,
-                  assignment().directTeamId,
-                  q.events,
-                  round.id,
-                  s.question,
-                  dir,
-                );
-          break;
-        }
-        case 'timer': {
-          live();
-          if (action.operation === 'reset') resetTimer();
-          if (action.operation === 'pause') pause();
-          if (action.operation === 'start' && (!s.timer.endsAt || s.timer.endsAt <= Date.now())) {
-            const expired = s.timer.endsAt !== null && s.timer.endsAt <= Date.now();
-            s.timer.endsAt =
-              Date.now() +
-              (!expired && s.timer.remainingMs > 0 ? s.timer.remainingMs : q.pounceSeconds * 1000);
-          }
-          break;
-        }
-        case 'roundMaster': {
-          started();
-          if (!q.rounds.some((r) => r.id === action.roundId))
-            fail('Round does not belong to this quiz.');
-          s.roundMasters = { ...s.roundMasters, [action.roundId]: action.master };
-          break;
-        }
-        case 'roundDirection': {
-          started();
-          const targetRoundId = action.roundId || round.id;
-          if (!q.rounds.some((r) => r.id === targetRoundId))
-            fail('Round does not belong to this quiz.');
-          s.roundDirections = { ...s.roundDirections, [targetRoundId]: action.direction };
-          if (targetRoundId === round.id) {
-            assignment().nextTeamId =
-              s.bounceEnabled === false
-                ? getNonBounceNextTeam(s.order, s.question, action.direction)
-                : resolveBounceNextTeamId(
-                    s.order,
-                    assignment().directTeamId,
-                    q.events,
-                    round.id,
-                    s.question,
-                    action.direction,
-                  );
-          }
-          break;
-        }
-        case 'settings': {
-          started();
-          if (
-            (action.positive !== q.positive || action.negative !== q.negative) &&
-            !action.confirmed
-          )
-            fail('Confirm the scoring rule change. Existing scores will remain unchanged.');
-          update.positive = action.positive;
-          update.negative = action.negative;
-          update.pounceSeconds = action.pounceSeconds;
-          if (q.pounceSeconds !== action.pounceSeconds)
-            s.timer = { remainingMs: action.pounceSeconds * 1000, endsAt: null };
-          break;
-        }
-        case 'completeRound':
-          live();
-          update.status = 'ROUND_COMPLETE';
-          pause();
-          break;
-        case 'nextRound': {
-          if (q.status !== 'ROUND_COMPLETE') fail('Complete the current round first.');
-          if (s.roundIndex + 1 >= q.rounds.length) {
-            update.status = 'QUIZ_COMPLETE';
-            break;
-          }
-          s.roundIndex++;
-          const nextR = q.rounds[s.roundIndex];
-          if (action.master)
-            s.roundMasters = { ...s.roundMasters, [nextR.id]: action.master };
-          if (action.direction)
-            s.roundDirections = { ...s.roundDirections, [nextR.id]: action.direction };
-          s.question = 1;
-          initQuestion(s.order[0]);
-          resetTimer();
-          update.status = 'LIVE';
-          break;
-        }
-        case 'endQuiz':
-          started();
-          pause();
-          update.status = 'QUIZ_COMPLETE';
-          break;
-        case 'resume':
-          started();
-          update.status = 'LIVE';
-          break;
-        case 'tieBreak': {
-          if (q.status !== 'QUIZ_COMPLETE')
-            fail('Finish the quiz before adding a tie-break round.');
-          const number = q.rounds.filter((r) => r.name.startsWith('Tie-break')).length + 1;
-          const tieRound = await tx.round.create({
-            data: { quizId, name: `Tie-break ${number}`, questions: 1, order: q.rounds.length },
-          });
-          if (action.master) s.roundMasters = { ...s.roundMasters, [tieRound.id]: action.master };
-          if (action.direction)
-            s.roundDirections = { ...s.roundDirections, [tieRound.id]: action.direction };
-          s.roundIndex = q.rounds.length;
-          s.question = 1;
-          initQuestion(s.order[0]);
-          resetTimer();
-          update.status = 'LIVE';
-          break;
-        }
-        case 'reset': {
-          started();
-          await tx.scoreEvent.updateMany({
-            where: { quizId, voidedAt: null },
-            data: {
-              voidedAt: new Date(),
-              voidReason: action.restart ? 'Quiz restarted' : 'Scores reset',
-            },
-          });
-          if (action.restart) {
-            s.roundIndex = 0;
-            s.question = 1;
-            s.assignments = {};
-            initQuestion(s.order[0]);
-            resetTimer();
-            update.status = 'LIVE';
-          }
-          break;
-        }
-      }
-      await tx.quiz.update({
-        where: { id: quizId },
-        data: { ...update, state: json(s), version: { increment: 1 } },
-      });
-      await tx.command.create({
-        data: { id: requestId, quizId, action: action.type, payload: json(action) },
-      });
-    },
-    { timeout: 15000 },
+  started();
+  const event = activeEvent(action.eventId);
+  await tx.scoreEvent.update({
+    where: { id: event.id },
+    data: { voidedAt: new Date(), voidReason: action.reason },
+  });
+  const updatedEvents = q.events.map((e) =>
+    e.id === event.id ? { ...e, voidedAt: new Date() } : e,
   );
-  return getQuiz(quizId);
+  if (action.type === 'editEvent') {
+    await tx.scoreEvent.create({
+      data: {
+        quizId,
+        teamId: event.teamId,
+        roundId: event.roundId,
+        question: event.question,
+        type: event.type,
+        marks: action.marks,
+        reason: action.reason,
+        replacesId: event.id,
+      },
+    });
+    updatedEvents.push({
+      ...event,
+      id: 'edit-replacement',
+      marks: action.marks,
+      reason: action.reason,
+      voidedAt: null,
+    });
+  }
+  if (s.bounceEnabled !== false) {
+    assignment().nextTeamId = resolveBounceNextTeamId(
+      s.order,
+      assignment().directTeamId,
+      updatedEvents,
+      round.id,
+      s.question,
+      currentDirection(),
+    );
+  }
+  break;
+}
+        case 'navigate': {
+  live();
+  const next = s.question + action.delta;
+  if (next < 1 || next > round.questions) fail('Question is outside the current round.');
+  const dir = currentDirection();
+  const direct =
+    s.bounceEnabled === false
+      ? getNonBounceDirectTeam(s.order, next, dir)
+      : assignment().nextTeamId;
+  s.question = next;
+  initQuestion(direct);
+  resetTimer();
+  break;
+}
+        case 'bounceMode': {
+  started();
+  s.bounceEnabled = action.enabled;
+  const dir = currentDirection();
+  assignment().nextTeamId = action.enabled
+    ? resolveBounceNextTeamId(
+      s.order,
+      assignment().directTeamId,
+      q.events,
+      round.id,
+      s.question,
+      dir,
+    )
+    : getNonBounceNextTeam(s.order, s.question, dir);
+  break;
+}
+        case 'assign':
+live();
+team(action.teamId);
+if (action.target === 'nextTeamId' && s.bounceEnabled === false)
+  fail('Enable bounce rotation to override the next direct team.');
+assignment()[action.target] = action.teamId;
+if (action.target === 'directTeamId' && s.bounceEnabled !== false)
+  assignment().nextTeamId = resolveBounceNextTeamId(
+    s.order,
+    action.teamId,
+    q.events,
+    round.id,
+    s.question,
+    currentDirection(),
+  );
+break;
+        case 'order': {
+  started();
+  if (
+    new Set(action.order).size !== q.teams.length ||
+    action.order.length !== q.teams.length ||
+    action.order.some((id) => !q.teams.some((t) => t.id === id))
+  )
+    fail('Team order must include each team exactly once.');
+  s.order = action.order;
+  const dir = currentDirection();
+  assignment().nextTeamId =
+    s.bounceEnabled === false
+      ? getNonBounceNextTeam(s.order, s.question, dir)
+      : resolveBounceNextTeamId(
+        s.order,
+        assignment().directTeamId,
+        q.events,
+        round.id,
+        s.question,
+        dir,
+      );
+  break;
+}
+        case 'timer': {
+  live();
+  if (action.operation === 'reset') resetTimer();
+  if (action.operation === 'pause') pause();
+  if (action.operation === 'start' && (!s.timer.endsAt || s.timer.endsAt <= Date.now())) {
+    const expired = s.timer.endsAt !== null && s.timer.endsAt <= Date.now();
+    s.timer.endsAt =
+      Date.now() +
+      (!expired && s.timer.remainingMs > 0 ? s.timer.remainingMs : q.pounceSeconds * 1000);
+  }
+  break;
+}
+        case 'roundMaster': {
+  started();
+  if (!q.rounds.some((r) => r.id === action.roundId))
+    fail('Round does not belong to this quiz.');
+  s.roundMasters = { ...s.roundMasters, [action.roundId]: action.master };
+  break;
+}
+        case 'roundDirection': {
+  started();
+  const targetRoundId = action.roundId || round.id;
+  if (!q.rounds.some((r) => r.id === targetRoundId))
+    fail('Round does not belong to this quiz.');
+  s.roundDirections = { ...s.roundDirections, [targetRoundId]: action.direction };
+  if (targetRoundId === round.id) {
+    assignment().nextTeamId =
+      s.bounceEnabled === false
+        ? getNonBounceNextTeam(s.order, s.question, action.direction)
+        : resolveBounceNextTeamId(
+          s.order,
+          assignment().directTeamId,
+          q.events,
+          round.id,
+          s.question,
+          action.direction,
+        );
+  }
+  break;
+}
+        case 'settings': {
+  started();
+  if (
+    (action.positive !== q.positive || action.negative !== q.negative) &&
+    !action.confirmed
+  )
+    fail('Confirm the scoring rule change. Existing scores will remain unchanged.');
+  update.positive = action.positive;
+  update.negative = action.negative;
+  update.pounceSeconds = action.pounceSeconds;
+  if (q.pounceSeconds !== action.pounceSeconds)
+    s.timer = { remainingMs: action.pounceSeconds * 1000, endsAt: null };
+  break;
+}
+        case 'completeRound':
+live();
+update.status = 'ROUND_COMPLETE';
+pause();
+break;
+        case 'nextRound': {
+  if (q.status !== 'ROUND_COMPLETE') fail('Complete the current round first.');
+  if (s.roundIndex + 1 >= q.rounds.length) {
+    update.status = 'QUIZ_COMPLETE';
+    break;
+  }
+  s.roundIndex++;
+  const nextR = q.rounds[s.roundIndex];
+  if (action.master)
+    s.roundMasters = { ...s.roundMasters, [nextR.id]: action.master };
+  if (action.direction)
+    s.roundDirections = { ...s.roundDirections, [nextR.id]: action.direction };
+  s.question = 1;
+  initQuestion(s.order[0]);
+  resetTimer();
+  update.status = 'LIVE';
+  break;
+}
+        case 'endQuiz':
+started();
+pause();
+update.status = 'QUIZ_COMPLETE';
+break;
+        case 'resume':
+started();
+update.status = 'LIVE';
+break;
+        case 'tieBreak': {
+  if (q.status !== 'QUIZ_COMPLETE')
+    fail('Finish the quiz before adding a tie-break round.');
+  const number = q.rounds.filter((r) => r.name.startsWith('Tie-break')).length + 1;
+  const tieRound = await tx.round.create({
+    data: { quizId, name: `Tie-break ${number}`, questions: 1, order: q.rounds.length },
+  });
+  if (action.master) s.roundMasters = { ...s.roundMasters, [tieRound.id]: action.master };
+  if (action.direction)
+    s.roundDirections = { ...s.roundDirections, [tieRound.id]: action.direction };
+  s.roundIndex = q.rounds.length;
+  s.question = 1;
+  initQuestion(s.order[0]);
+  resetTimer();
+  update.status = 'LIVE';
+  break;
+}
+        case 'reset': {
+  started();
+  await tx.scoreEvent.updateMany({
+    where: { quizId, voidedAt: null },
+    data: {
+      voidedAt: new Date(),
+      voidReason: action.restart ? 'Quiz restarted' : 'Scores reset',
+    },
+  });
+  if (action.restart) {
+    s.roundIndex = 0;
+    s.question = 1;
+    s.assignments = {};
+    initQuestion(s.order[0]);
+    resetTimer();
+    update.status = 'LIVE';
+  }
+  break;
+}
+      }
+await tx.quiz.update({
+  where: { id: quizId },
+  data: { ...update, state: json(s), version: { increment: 1 } },
+});
+await tx.command.create({
+  data: { id: requestId, quizId, action: action.type, payload: json(action) },
+});
+    },
+{ timeout: 15000 },
+  );
+return getQuiz(quizId);
 }
 
 export async function createDemo(ownerId?: string) {
