@@ -336,3 +336,39 @@ test('part pounce deactivates further scoring for that team on the same question
   assert.equal(hasQuestionScore(events, 'team-2', 'round-1', 1), true);
   assert.equal(hasQuestionScore(events, 'team-3', 'round-1', 1), false);
 });
+
+
+test('manual typing of decimal / point marks (2.5, 7.5, -2.5) is accepted by actionSchema', () => {
+  const adjustDecimal = {
+    type: 'adjust',
+    teamId: 'team-1',
+    marks: 2.5,
+    reason: 'Partial answer credit',
+  };
+  assert.equal(actionSchema.safeParse(adjustDecimal).success, true);
+
+  const adjustNegativeDecimal = {
+    type: 'adjust',
+    teamId: 'team-1',
+    marks: -2.5,
+    reason: 'Partial deduction',
+  };
+  assert.equal(actionSchema.safeParse(adjustNegativeDecimal).success, true);
+
+  const editEventDecimal = {
+    type: 'editEvent',
+    eventId: 'event-1',
+    marks: 7.5,
+    reason: 'Correction to 7.5',
+  };
+  assert.equal(actionSchema.safeParse(editEventDecimal).success, true);
+
+  const scoreDecimal = {
+    type: 'score',
+    teamId: 'team-1',
+    scoreType: 'DIRECT_CORRECT',
+    marks: 2.5,
+    reason: 'Part Direct',
+  };
+  assert.equal(actionSchema.safeParse(scoreDecimal).success, true);
+});

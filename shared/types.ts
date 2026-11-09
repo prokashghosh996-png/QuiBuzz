@@ -121,10 +121,12 @@ export function teamLetter(index: number): string {
 export const teamLabel = (t?: Team) =>
   t ? `Team ${t.letter}${t.name ? ` — ${t.name}` : ''}` : '—';
 export const points = (n: number) => `${n >= 0 ? '+' : '−'}${Math.abs(n)}`;
-export const total = (quiz: Quiz, teamId: string, roundId?: string) =>
-  quiz.events
+export const total = (quiz: Quiz, teamId: string, roundId?: string) => {
+  const sum = quiz.events
     .filter((e) => !e.voidedAt && e.teamId === teamId && (!roundId || e.roundId === roundId))
-    .reduce((sum, e) => sum + e.marks, 0);
+    .reduce((acc, e) => acc + e.marks, 0);
+return Math.round(sum * 100) / 100;
+};
 export function standings(quiz: Quiz) {
   const rows = quiz.teams
     .map((team) => ({ team, score: total(quiz, team.id) }))

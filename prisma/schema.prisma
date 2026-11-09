@@ -113,7 +113,7 @@ model ScoreEvent {
   round      Round     @relation(fields: [roundId], references: [id], onDelete: Cascade)
   question   Int
   type       ScoreType
-  marks      Int
+  marks      Float
   reason     String    @default("")
   replacesId String?
   createdAt  DateTime  @default(now())
